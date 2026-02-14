@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+	--font-family-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+	background-color: #0f172a;
+	color: #f1f5f9;
+}
+
+/* Skeleton UI theme overrides */
+@layer base {
+	:root {
+		--color-surface-50: #f8fafc;
+		--color-surface-100: #f1f5f9;
+		--color-surface-200: #e2e8f0;
+		--color-surface-300: #cbd5e1;
+		--color-surface-400: #94a3b8;
+		--color-surface-500: #64748b;
+		--color-surface-600: #475569;
+		--color-surface-700: #334155;
+		--color-surface-800: #1e293b;
+		--color-surface-900: #0f172a;
+		--color-surface-950: #020617;
+
+		--color-primary-50: #eff6ff;
+		--color-primary-100: #dbeafe;
+		--color-primary-200: #bfdbfe;
+		--color-primary-300: #93c5fd;
+		--color-primary-400: #60a5fa;
+		--color-primary-500: #3b82f6;
+		--color-primary-600: #2563eb;
+		--color-primary-700: #1d4ed8;
+		--color-primary-800: #1e40af;
+		--color-primary-900: #1e3a8a;
+		--color-primary-950: #172554;
+	}
+}
+
+/* Utility classes for light/dark mode */
+.bg-surface-50-950 {
+	background-color: #f8fafc;
+}
+
+@media (prefers-color-scheme: dark) {
+	.bg-surface-50-950 {
+		background-color: #0f172a;
+	}
+}
+
+.text-surface-950-50 {
+	color: #020617;
+}
+
+@media (prefers-color-scheme: dark) {
+	.text-surface-950-50 {
+		color: #f8fafc;
+	}
+}
+
+.text-surface-500 {
+	color: #64748b;
+}
+
+.bg-surface-100-900 {
+	background-color: #f1f5f9;
+}
+
+@media (prefers-color-scheme: dark) {
+	.bg-surface-100-900 {
+		background-color: #0f172a;
+	}
+}
+
+.bg-surface-200-800 {
+	background-color: #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.bg-surface-200-800 {
+		background-color: #1e293b;
+	}
+}
+
+.border-surface-200-800 {
+	border-color: #e2e8f0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.border-surface-200-800 {
+		border-color: #1e293b;
+	}
+}
+
+.border-surface-300-700 {
+	border-color: #cbd5e1;
+}
+
+@media (prefers-color-scheme: dark) {
+	.border-surface-300-700 {
+		border-color: #334155;
+	}
+}
+
+.bg-surface-700 {
+	background-color: #334155;
+}
+
+.bg-surface-600 {
+	background-color: #475569;
+}
+
+.bg-surface-800/80 {
+	background-color: rgba(30, 41, 59, 0.8);
+}
+
+.bg-surface-900 {
+	background-color: #0f172a;
+}
+
+.text-surface-400 {
+	color: #94a3b8;
+}

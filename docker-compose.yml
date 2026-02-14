@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: klipper-print-share
+    ports:
+      - "3000:3000"
+    environment:
+      - MOONRAKER_URL=${MOONRAKER_URL:-http://192.168.1.119:7125}
+      - DATABASE_PATH=/data/tokens.db
+      - NODE_ENV=production
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    networks:
+      - print-share-network
+
+
+networks:
+  print-share-network:
+    driver: bridge
