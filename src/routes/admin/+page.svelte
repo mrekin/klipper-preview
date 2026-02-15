@@ -2,6 +2,13 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import QRCode from '$lib/components/QRCode.svelte';
+	import type { PageData } from './$types';
+
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
 
 	interface Token {
 		id: number;
@@ -24,13 +31,14 @@
 		bed_target: number;
 	}
 
-	let tokens: Token[] = $state([]);
-	let status: PrinterStatus | null = $state(null);
-	let loading = $state(true);
+	let tokens = $state<Token[]>(data.tokens);
+	let status = $state<PrinterStatus | null>(data.status);
+	let loading = $state(false);
 	let newTokenTtl = $state(60);
 	let newTokenComment = $state('');
-	let generatedToken: Token | null = $state(null);
+	let generatedToken = $state<Token | null>(null);
 	let copied = $state(false);
+	let validationMessage = $state('');
 
 	// Предустановленные варианты TTL
 	const ttlOptions = [
@@ -46,6 +54,19 @@
 		{ value: 1440, label: '24 часа' },
 	];
 
+	function validateTtl(value: number): number {
+		if (value < 1) {
+			validationMessage = 'Минимум: 1 минута';
+			return 1;
+		}
+		if (value > 43200) {
+			validationMessage = 'Максимум: 43200 минут (30 дней)';
+			return 43200;
+		}
+		validationMessage = '';
+		return value;
+	}
+
 	async function loadData() {
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
@@ -57,8 +78,6 @@
 			status = await statusRes.json();
 		} catch (e) {
 			console.error('Load error:', e);
-		} finally {
-			loading = false;
 		}
 	}
 
@@ -97,9 +116,43 @@
 
 	function copyLink(token: string) {
 		const url = `${window.location.origin}/view/${token}`;
-		navigator.clipboard.writeText(url);
-		copied = true;
-		setTimeout(() => copied = false, 2000);
+
+		// Try modern clipboard API first
+		if (navigator.clipboard && window.isSecureContext) {
+			navigator.clipboard.writeText(url)
+				.then(() => {
+					copied = true;
+					setTimeout(() => copied = false, 2000);
+				})
+				.catch(() => {
+					// Fallback to old method if clipboard API fails
+					fallbackCopy(url);
+				});
+		} else {
+			// Fallback for non-secure contexts or older browsers
+			fallbackCopy(url);
+		}
+	}
+
+	function fallbackCopy(text: string) {
+		const textarea = document.createElement('textarea');
+		textarea.value = text;
+		textarea.style.position = 'fixed';
+		textarea.style.left = '-999999px';
+		textarea.style.top = '-999999px';
+		document.body.appendChild(textarea);
+		textarea.focus();
+		textarea.select();
+
+		try {
+			document.execCommand('copy');
+			copied = true;
+			setTimeout(() => copied = false, 2000);
+		} catch (err) {
+			console.error('Failed to copy:', err);
+		}
+
+		document.body.removeChild(textarea);
 	}
 
 	function formatTime(expiresAt: number): string {
@@ -117,8 +170,11 @@
 		return new Date(timestamp).toLocaleString('ru-RU');
 	}
 
+	$effect(() => {
+		newTokenTtl = validateTtl(newTokenTtl);
+	});
+
 	onMount(() => {
-		loadData();
 		// Обновление статуса каждые 5 секунд
 		const interval = setInterval(loadData, 5000);
 		return () => clearInterval(interval);
@@ -235,9 +291,9 @@
 							<div class="flex gap-2">
 								<input
 									type="number"
-									step="30"
-									min="30"
-									max="10080"
+									step="5"
+									min="1"
+									max="43200"
 									bind:value={newTokenTtl}
 									class="flex-1 px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950"
 									placeholder="Произвольное время (мин)"
@@ -249,6 +305,11 @@
 									Создать ссылку
 								</button>
 							</div>
+							{#if validationMessage}
+								<div class="text-sm text-orange-500 mt-1">
+									{validationMessage}
+								</div>
+							{/if}
 						</div>
 
 						{#if generatedToken}

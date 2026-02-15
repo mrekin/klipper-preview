@@ -44,3 +44,5 @@ server.log
 
 # upload
 /upload/
+docs/
+.main.gt

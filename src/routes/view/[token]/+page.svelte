@@ -1,7 +1,13 @@
 <script lang="ts">
         import { page } from '$app/stores';
-        import { onMount, onDestroy } from 'svelte';
+        import { browser } from '$app/environment';
         import GCodeViewer from '$lib/components/GCodeViewer.svelte';
+
+        interface TokenData {
+                token: string;
+                created_at: number;
+                expires_at: number;
+        }
         
         interface PrinterStatus {
                 state: string;
@@ -15,15 +21,20 @@
                 bed_target: number;
                 current_layer: number;
                 total_layers: number;
+                position: { x: number; y: number; z: number };
         }
-        
+
         let status: PrinterStatus | null = $state(null);
         let gcodeLines: string[] = $state([]);
         let loading = $state(true);
         let error: string | null = $state(null);
         let token: string = $derived($page.params.token ?? '');
-        
-        let updateInterval: ReturnType<typeof setInterval>;
+        let tokenData: TokenData | null = $state(null);
+        let loadedFilename: string | null = $state(null);
+
+        let updateInterval: ReturnType<typeof setInterval> | undefined = undefined;
+
+        let currentFilename = $derived.by(() => status?.filename ?? null);
         
         async function loadStatus() {
                 try {
@@ -44,15 +55,20 @@
                 }
         }
         
-        async function loadGcode() {
-                if (!status?.filename || gcodeLines.length > 0) return;
-                
+        async function loadGcode(filename: string) {
+                if (loadedFilename === filename) {
+                        return;
+                }
+
                 try {
-                        const res = await fetch(`/api/gcode/${token}?file=${encodeURIComponent(status.filename)}`);
-                        
+                        const res = await fetch(`/api/gcode/${token}?file=${encodeURIComponent(filename)}`);
+
                         if (res.ok) {
                                 const data = await res.json();
                                 gcodeLines = data.lines || [];
+                                loadedFilename = filename;
+                        } else {
+                                console.error('[GCODE] Error response:', res.status, await res.text().catch(() => ''));
                         }
                 } catch (e) {
                         console.error('G-code load error:', e);
@@ -74,28 +90,59 @@
                 if (seconds <= 0) return '—';
                 const h = Math.floor(seconds / 3600);
                 const m = Math.floor((seconds % 3600) / 60);
-                
+
                 if (h > 0) return `~${h}ч ${m}мин`;
                 return `~${m}мин`;
         }
+
+        function formatTimeRemaining(expiresAt: number): string {
+                const remaining = expiresAt - Date.now();
+                if (remaining <= 0) return 'Истёк';
+                const h = Math.floor(remaining / (1000 * 60 * 60));
+                const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                if (h > 0) return `${h}ч ${m}мин`;
+                return `${m}мин`;
+        }
+
+        function calculatePrintETA(status: PrinterStatus): string {
+                // Рассчитываем на основе прогресса
+                if (status.progress > 0 && status.print_duration > 0) {
+                        // Рассчитываем среднее время на 1% прогресса
+                        const timePerPercent = status.print_duration / status.progress;
+                        // Оставшееся время = время на 1% * оставшиеся %
+                        const remaining = timePerPercent * (100 - status.progress);
+                        return formatETA(remaining);
+                }
+
+                return '—';
+        }
         
         $effect(() => {
-                if (status?.filename) {
-                        loadGcode();
+                if (currentFilename) {
+                        loadGcode(currentFilename);
                 }
         });
         
-        onMount(async () => {
-                await loadStatus();
-                loading = false;
-                
-                // Обновление каждые 2 секунды
-                updateInterval = setInterval(loadStatus, 2000);
-        });
-        
-        onDestroy(() => {
-                if (updateInterval) clearInterval(updateInterval);
-        });
+        // Запускаем только в браузере
+        if (browser) {
+                (async () => {
+                        // Загружаем информацию о токене
+                        try {
+                                const res = await fetch(`/api/token/${token}?noCache=true`);
+                                if (res.ok) {
+                                        tokenData = await res.json();
+                                }
+                        } catch (e) {
+                                console.error('Token info load error:', e);
+                        }
+
+                        await loadStatus();
+                        loading = false;
+
+                        // Обновление каждые 2 секунды
+                        updateInterval = setInterval(loadStatus, 2000);
+                })();
+        }
 </script>
 
 <svelte:head>
@@ -169,7 +216,7 @@
                                                         </div>
                                                         <div>
                                                                 <p class="text-surface-400 text-sm mb-1">Осталось</p>
-                                                                <p class="text-2xl font-mono">{formatETA(status.estimated_time - status.print_duration)}</p>
+                                                                <p class="text-2xl font-mono">{calculatePrintETA(status)}</p>
                                                         </div>
                                                 </div>
                                         </div>
@@ -234,6 +281,7 @@
                                                                 gcodeLines={gcodeLines} 
                                                                 currentLayer={status.current_layer}
                                                                 totalLayers={status.total_layers}
+                                                                nozzlePosition={status.position || { x: 0, y: 0, z: 0 }}
                                                         />
                                                 {:else}
                                                         <div class="flex items-center justify-center h-full text-surface-400">
@@ -246,10 +294,14 @@
                                         </div>
                                 </div>
                         </div>
-                        
+
                         <!-- Footer -->
                         <footer class="mt-8 text-center text-sm text-surface-500">
-                                <p>Klipper Print Share • Обновляется автоматически</p>
+                                {#if tokenData}
+                                        <p>Действует {formatTimeRemaining(tokenData.expires_at)}</p>
+                                {:else}
+                                        <p>Ссылка недействительна</p>
+                                {/if}
                         </footer>
                 </div>
         {/if}

@@ -1,13 +1,12 @@
 <script lang="ts">
-        import { onMount } from 'svelte';
-        
         interface Props {
                 gcodeLines: string[];
                 currentLayer: number;
                 totalLayers: number;
+                nozzlePosition: { x: number; y: number; z: number };
         }
-        
-        let { gcodeLines, currentLayer = 0, totalLayers = 100 }: Props = $props();
+
+        let { gcodeLines, currentLayer = 0, totalLayers = 100, nozzlePosition }: Props = $props();
         
         let canvas: HTMLCanvasElement | null = $state(null);
         let ctx: CanvasRenderingContext2D | null = $state(null);
@@ -26,7 +25,30 @@
         
         // Распарсенные данные
         let layers = $state<{ z: number; moves: { x: number; y: number; type: 'move' | 'extrude' }[] }[]>([]);
-        
+        let lastParsedLength = 0;
+
+        // Отслеживание отображаемого слоя
+        let displayLayer = $derived.by(() => {
+                return Math.min(Math.max(0, currentLayer), layers.length - 1);
+        });
+
+        // Отдельная функция для масштабирования и центрирования
+        function fitToView(padding = 20) {
+                if (canvas && layers.length > 0 && maxX > minX && maxY > minY) {
+                        const modelWidth = maxX - minX;
+                        const modelHeight = maxY - minY;
+
+                        scale = Math.min(
+                                (canvas.width - padding * 2) / modelWidth,
+                                (canvas.height - padding * 2) / modelHeight
+                        );
+
+                        // Центрируем модель на канвасе
+                        offsetX = (canvas.width - modelWidth * scale) / 2 - minX * scale;
+                        offsetY = (canvas.height - modelHeight * scale) / 2 - minY * scale;
+                }
+        }
+
         // Парсинг G-code
         function parseGcode(lines: string[]) {
                 layers = [];
@@ -34,18 +56,26 @@
                 let currentLayerMoves: { x: number; y: number; type: 'move' | 'extrude' }[] = [];
                 let x = 0, y = 0;
                 let currentE = 0;
-                
+
                 // Сброс границ
                 minX = Infinity; maxX = -Infinity;
                 minY = Infinity; maxY = -Infinity;
-                
+
+                let moveCount = 0;
+                let layerCount = 0;
+
                 for (const line of lines) {
                         const trimmed = line.trim();
-                        
-                        // Определение слоя
-                        if (trimmed.startsWith(';LAYER:') || trimmed.startsWith('; layer')) {
+
+                        // Определение слоёв - поддерживаем больше вариантов маркеров
+                        if (trimmed.startsWith(';LAYER:') ||
+                            trimmed.startsWith(';LAYER;') ||
+                            trimmed.startsWith('; layer ') ||
+                            trimmed.startsWith(';LAYER:') ||
+                            trimmed.startsWith(';LAYER:')) {
                                 if (currentLayerMoves.length > 0) {
                                         layers.push({ z: currentZ, moves: [...currentLayerMoves] });
+                                        layerCount++;
                                 }
                                 currentLayerMoves = [];
                                 const zMatch = trimmed.match(/(\d+\.?\d*)/);
@@ -54,69 +84,64 @@
                                 }
                                 continue;
                         }
-                        
+
                         // Парсинг G0/G1 команд
                         if (trimmed.startsWith('G0') || trimmed.startsWith('G1')) {
                                 const parts = trimmed.split(/\s+/);
                                 let newX = x, newY = y, newE = currentE;
                                 let isMove = trimmed.startsWith('G0');
-                                
+                                let hasX = false, hasY = false;
+
                                 for (const part of parts) {
                                         if (part.startsWith('X')) {
                                                 newX = parseFloat(part.slice(1));
-                                                if (!isNaN(newX)) {
-                                                        minX = Math.min(minX, newX);
-                                                        maxX = Math.max(maxX, newX);
-                                                }
+                                                hasX = !isNaN(newX);
                                         } else if (part.startsWith('Y')) {
                                                 newY = parseFloat(part.slice(1));
-                                                if (!isNaN(newY)) {
-                                                        minY = Math.min(minY, newY);
-                                                        maxY = Math.max(maxY, newY);
-                                                }
+                                                hasY = !isNaN(newY);
                                         } else if (part.startsWith('E')) {
                                                 newE = parseFloat(part.slice(1));
                                         }
                                 }
-                                
-                                if (!isNaN(newX) && !isNaN(newY)) {
+
+                                // Обновляем границы только если координаты действительно изменились
+                                if (hasX) {
+                                        minX = Math.min(minX, newX);
+                                        maxX = Math.max(maxX, newX);
+                                }
+                                if (hasY) {
+                                        minY = Math.min(minY, newY);
+                                        maxY = Math.max(maxY, newY);
+                                }
+
+                                if (hasX && hasY) {
                                         // Определяем тип движения: перемещение или экструзия
                                         const type = isMove || newE <= currentE ? 'move' : 'extrude';
                                         currentLayerMoves.push({ x: newX, y: newY, type });
                                         x = newX;
                                         y = newY;
                                         currentE = newE;
+                                        moveCount++;
                                 }
                         }
                 }
-                
+
                 // Добавляем последний слой
                 if (currentLayerMoves.length > 0) {
                         layers.push({ z: currentZ, moves: [...currentLayerMoves] });
+                        layerCount++;
                 }
-                
-                // Автомасштабирование
-                if (canvas && layers.length > 0) {
-                        const modelWidth = maxX - minX;
-                        const modelHeight = maxY - minY;
-                        const padding = 20;
-                        
-                        scale = Math.min(
-                                (canvas.width - padding * 2) / modelWidth,
-                                (canvas.height - padding * 2) / modelHeight
-                        );
-                        
-                        offsetX = (canvas.width - modelWidth * scale) / 2 - minX * scale;
-                        offsetY = (canvas.height - modelHeight * scale) / 2 - minY * scale;
-                }
-                
+
+                // Масштабируем и центрируем модель
+                fitToView(20);
                 render();
         }
         
         // Рендеринг
         function render() {
-                if (!ctx || !canvas || layers.length === 0) return;
-                
+                if (!ctx || !canvas || layers.length === 0) {
+                        return;
+                }
                 // Очистка
                 ctx.fillStyle = '#1a1a2e';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -125,45 +150,49 @@
                 ctx.strokeStyle = '#2a2a4e';
                 ctx.lineWidth = 1;
                 const gridSize = 10 * scale;
-                
-                for (let x = offsetX % gridSize; x < canvas.width; x += gridSize) {
+
+                // Вертикальные линии (по оси X)
+                const startX = offsetX % gridSize;
+                for (let x = startX; x < canvas.width; x += gridSize) {
                         ctx.beginPath();
                         ctx.moveTo(x, 0);
                         ctx.lineTo(x, canvas.height);
                         ctx.stroke();
                 }
-                
-                for (let y = offsetY % gridSize; y < canvas.height; y += gridSize) {
-                        ctx.beginPath();
-                        ctx.moveTo(0, y);
-                        ctx.lineTo(canvas.width, y);
-                        ctx.stroke();
+
+                // Горизонтальные линии (по оси Y) - с учетом инверсии
+                const startY = offsetY % gridSize;
+                for (let y = startY; y < canvas.height; y += gridSize) {
+                        const canvasY = canvas.height - y;
+                        if (canvasY >= 0 && canvasY < canvas.height) {
+                                ctx.beginPath();
+                                ctx.moveTo(0, canvasY);
+                                ctx.lineTo(canvas.width, canvasY);
+                                ctx.stroke();
+                        }
                 }
                 
                 // Отрисовка слоёв
-                const safeLayer = Math.min(Math.max(0, currentLayer), layers.length);
-                
-                // Напечатанные слои (серый)
-                ctx.strokeStyle = '#4a4a6a';
-                ctx.lineWidth = 0.5;
-                
-                for (let i = 0; i < safeLayer && i < layers.length; i++) {
+                // currentLayer - это 1-based номер слоя из Klipper
+                // Для массива нужен 0-based индекс: currentLayer - 1
+                const layerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+
+                // Напечатанные слои (серый) - отрисовываем все слои ДО текущего
+                for (let i = 0; i < layerIndex && i < layers.length; i++) {
                         drawLayer(layers[i], '#4a4a6a');
                 }
-                
+
                 // Текущий слой (синий)
-                if (safeLayer < layers.length) {
-                        ctx.strokeStyle = '#3b82f6';
-                        ctx.lineWidth = 1;
-                        drawLayer(layers[safeLayer], '#3b82f6');
+                if (layerIndex < layers.length && layerIndex >= 0) {
+                        drawLayer(layers[layerIndex], '#3b82f6');
                 }
-                
-                // Текущая позиция
-                if (safeLayer < layers.length && layers[safeLayer].moves.length > 0) {
-                        const lastMove = layers[safeLayer].moves[layers[safeLayer].moves.length - 1];
-                        const px = lastMove.x * scale + offsetX;
-                        const py = canvas.height - (lastMove.y * scale + offsetY);
-                        
+
+                // Текущая позиция сопла (красная точка)
+                // Используем реальные координаты из API
+                if (nozzlePosition) {
+                        const px = nozzlePosition.x * scale + offsetX;
+                        const py = canvas.height - (nozzlePosition.y * scale + offsetY);
+
                         ctx.beginPath();
                         ctx.arc(px, py, 4, 0, Math.PI * 2);
                         ctx.fillStyle = '#ef4444';
@@ -173,47 +202,56 @@
         
         function drawLayer(layer: typeof layers[0], color: string) {
                 if (!ctx || !canvas) return;
-                
+
                 ctx.strokeStyle = color;
+                ctx.lineWidth = color === '#3b82f6' ? 1 : 0.5;
                 ctx.beginPath();
-                
-                let lastX = 0, lastY = 0;
-                
+
+                let lastX: number | null = null;
+                let lastY: number | null = null;
+
                 for (const move of layer.moves) {
                         const x = move.x * scale + offsetX;
+                        // Инвертируем Y для отображения (в 3D-принтере Y идет "вглубь")
                         const y = canvas.height - (move.y * scale + offsetY);
-                        
-                        if (move.type === 'extrude') {
+
+                        if (move.type === 'extrude' && lastX !== null && lastY !== null) {
                                 ctx.moveTo(lastX, lastY);
                                 ctx.lineTo(x, y);
                         }
-                        
+
+                        // Сохраняем текущую точку для следующей итерации
                         lastX = x;
                         lastY = y;
                 }
-                
+
                 ctx.stroke();
         }
         
         // Обработчики событий
         function handleWheel(e: WheelEvent) {
                 e.preventDefault();
+                if (!canvas) return;
+
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
-                
+
                 // Масштабирование относительно курсора
-                const rect = canvas?.getBoundingClientRect();
-                if (!rect) return;
-                
+                const rect = canvas.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
-                
+
                 const newScale = Math.max(0.1, Math.min(10, scale * delta));
                 const scaleChange = newScale / scale;
-                
+
+                // Для X - обычная система координат
                 offsetX = mouseX - (mouseX - offsetX) * scaleChange;
-                offsetY = mouseY - (mouseY - offsetY) * scaleChange;
+                // Для Y - инвертированная система координат (из-за canvas.height - ...)
+                // Используем инвертированную позицию курсора
+                const mouseYInverted = canvas.height - mouseY;
+                offsetY = mouseYInverted - (mouseYInverted - offsetY) * scaleChange;
+
                 scale = newScale;
-                
+
                 render();
         }
         
@@ -225,16 +263,16 @@
         
         function handleMouseMove(e: MouseEvent) {
                 if (!isDragging) return;
-                
+
                 const dx = e.clientX - lastX;
                 const dy = e.clientY - lastY;
-                
+
                 offsetX += dx;
-                offsetY -= dy;
-                
+                offsetY -= dy;  // Инверсия для Y из-за canvas.height - (...) при отрисовке
+
                 lastX = e.clientX;
                 lastY = e.clientY;
-                
+
                 render();
         }
         
@@ -253,51 +291,64 @@
         }
         
         function resetView() {
-                if (canvas && layers.length > 0) {
-                        const modelWidth = maxX - minX;
-                        const modelHeight = maxY - minY;
-                        const padding = 40;
-                        
-                        scale = Math.min(
-                                (canvas.width - padding * 2) / modelWidth,
-                                (canvas.height - padding * 2) / modelHeight
-                        );
-                        
-                        offsetX = (canvas.width - modelWidth * scale) / 2 - minX * scale;
-                        offsetY = (canvas.height - modelHeight * scale) / 2 - minY * scale;
-                        
-                        render();
-                }
+                fitToView(40);
+                render();
         }
         
         $effect(() => {
-                if (gcodeLines.length > 0 && canvas) {
+                // Парсим только когда загружаются новые данные
+                if (gcodeLines.length > 0 && canvas && gcodeLines.length !== lastParsedLength) {
                         parseGcode(gcodeLines);
+                        lastParsedLength = gcodeLines.length;
+                }
+        });
+
+        // Отслеживаем изменения для ререндеринга
+        let lastRenderedLayer = -1;
+        let lastRenderedLayersCount = -1;
+        let lastRenderedPosition = '-1,-1,-1';
+
+        $effect(() => {
+                const shouldRender = layers.length > 0 && ctx && canvas;
+                if (!shouldRender) return;
+
+                const layerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+                const positionKey = `${nozzlePosition?.x},${nozzlePosition?.y},${nozzlePosition?.z}`;
+                const needsRender = layerIndex !== lastRenderedLayer ||
+                                    layers.length !== lastRenderedLayersCount ||
+                                    positionKey !== lastRenderedPosition;
+
+                if (needsRender) {
+                        lastRenderedLayer = layerIndex;
+                        lastRenderedLayersCount = layers.length;
+                        lastRenderedPosition = positionKey;
+                        render();
                 }
         });
         
         $effect(() => {
-                // Перерисовка при смене слоя
-                render();
-        });
-        
-        onMount(() => {
-                const canvasEl = canvas;
-                if (canvasEl) {
-                        ctx = canvasEl.getContext('2d');
+                if (canvas && !ctx) {
+                        // Инициализация контекста когда canvas доступен
+                        ctx = canvas.getContext('2d');
+
                         // Начальный размер
                         const resize = () => {
-                                const container = canvasEl.parentElement;
+                                if (!canvas) return;
+                                const container = canvas.parentElement;
                                 if (container) {
-                                        canvasEl.width = container.clientWidth;
-                                        canvasEl.height = container.clientHeight;
+                                        canvas.width = container.clientWidth;
+                                        canvas.height = container.clientHeight;
+                                        // Пересчитываем масштабирование при изменении размера
+                                        if (layers.length > 0) {
+                                                fitToView(20);
+                                        }
                                         render();
                                 }
                         };
-                        
+
                         resize();
                         window.addEventListener('resize', resize);
-                        
+
                         return () => window.removeEventListener('resize', resize);
                 }
         });
@@ -338,6 +389,6 @@
         
         <!-- Layer info -->
         <div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
-                Слой: {Math.min(currentLayer + 1, layers.length)} / {layers.length}
+                Слой: {currentLayer} / {totalLayers}
         </div>
 </div>

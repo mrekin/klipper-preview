@@ -12,9 +12,9 @@ export const GET: RequestHandler = async () => {
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
 	
-	// Валидация TTL (шаг 30 минут, от 30 до 10080 минут)
+	// Валидация TTL (от 1 до 43200 минут, без округления)
 	let ttlMinutes = body.ttl || 60;
-	ttlMinutes = Math.max(30, Math.min(10080, Math.round(ttlMinutes / 30) * 30));
+	ttlMinutes = Math.max(1, Math.min(43200, Math.floor(Number(ttlMinutes))));
 	
 	const token = createToken(ttlMinutes, body.filename, body.comment);
 	return json(token, { status: 201 });

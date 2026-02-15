@@ -19,6 +19,7 @@ export interface PrinterStatus {
 	bed_target: number;
 	current_layer: number;
 	total_layers: number;
+	layer_count: number; // Из метаданных файла
 	position: { x: number; y: number; z: number };
 }
 
@@ -35,6 +36,7 @@ const mockStatus: PrinterStatus = {
 	bed_target: 60,
 	current_layer: 127,
 	total_layers: 450,
+	layer_count: 450,
 	position: { x: 125.4, y: 87.2, z: 12.7 }
 };
 
@@ -43,8 +45,7 @@ export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 	try {
 		const url = getMoonrakerUrl();
 
-		// Запрос к Moonraker API
-		// Fixed: proper query string with & separators
+		// Запрос к Moonraker API для статуса
 		const response = await fetch(
 			`${url}/printer/objects/query?display_status&print_stats&heater_bed&extruder&toolhead`,
 			{ signal: AbortSignal.timeout(5000) }
@@ -68,21 +69,47 @@ export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 		const heaterBed = result.heater_bed || {};
 		const toolhead = result.toolhead || {};
 
-		// Расчёт слоёв из метаданных файла (упрощённо)
-		const currentLayer = Math.floor((displayStatus.progress || 0) * 100);
+		// Получаем метаданные текущего файла
+		let layerCount = 100;
+		const filename = printStats.filename || '';
+		if (filename) {
+			try {
+				const metadataResponse = await fetch(
+					`${url}/server/files/metadata?filename=${encodeURIComponent(filename)}`,
+					{ signal: AbortSignal.timeout(3000) }
+				);
+				if (metadataResponse.ok) {
+					const metadataData = await metadataResponse.json();
+					layerCount = metadataData.result?.layer_count || 100;
+				}
+			} catch (e) {
+				console.warn('Failed to fetch file metadata:', e);
+			}
+		}
+
+		// Расчёт текущего слоя
+		const currentLayer = Math.floor((displayStatus.progress || 0) * layerCount);
+
+		// Получаем оценку времени печати из метаданных или используем текущее время как fallback
+		let estimatedTime = printStats.estimated_time || 0;
+		// Если estimated_time нет, используем total_duration из print_stats
+		if (!estimatedTime) {
+			estimatedTime = printStats.total_duration || 0;
+		}
 
 		return {
 			state: mapState(printStats.state),
-			filename: printStats.filename || '',
+			filename: filename,
 			progress: (displayStatus.progress || 0) * 100,
 			print_duration: printStats.print_duration || 0,
-			estimated_time: printStats.total_duration || printStats.print_duration || 0,
+			estimated_time: estimatedTime,
 			extruder_temp: extruder.temperature || 0,
 			extruder_target: extruder.target || 0,
 			bed_temp: heaterBed.temperature || 0,
 			bed_target: heaterBed.target || 0,
 			current_layer: currentLayer,
-			total_layers: 100, // Требуется запрос метаданных файла
+			total_layers: layerCount,
+			layer_count: layerCount,
 			position: {
 				x: toolhead.position?.[0] || 0,
 				y: toolhead.position?.[1] || 0,

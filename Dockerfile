@@ -1,22 +1,29 @@
 # Build stage
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
+
+# Install git which might be needed for some packages
+RUN apk add --no-cache git python3 make g++
+
+# Increase max memory for Node.js during build
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 WORKDIR /app
 
 # Copy package files
 COPY package.json ./
+COPY package-lock.json ./
 
-# Install dependencies (use npm install since we don't have package-lock.json)
-RUN npm install
+# Install dependencies (use --legacy-peer-deps to resolve dependency conflicts)
+RUN npm ci --legacy-peer-deps
 
-# Copy source
+# Copy source (excluding node_modules and .svelte-kit which will be regenerated)
 COPY . .
 
-# Build
+# Build with increased memory limits
 RUN npm run build
 
 # Production stage
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
