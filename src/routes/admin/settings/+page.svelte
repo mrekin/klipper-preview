@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { getBasePathUrl, getBasePath } from '$lib/config';
 
 	let moonrakerUrl = $state('');
 	let loading = $state(false);
@@ -12,7 +12,7 @@
 		loading = true;
 		error = '';
 		try {
-			const res = await fetch('/api/settings');
+			const res = await fetch(getBasePathUrl('/api/settings'));
 			if (!res.ok) throw new Error('Failed to load settings');
 			const data = await res.json();
 			moonrakerUrl = data.moonrakerUrl || '';
@@ -28,7 +28,7 @@
 		saving = true;
 		error = '';
 		try {
-			const res = await fetch('/api/settings', {
+			const res = await fetch(getBasePathUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ moonrakerUrl })
@@ -46,7 +46,8 @@
 		}
 	}
 
-	onMount(() => {
+	onMount(async () => {
+		await getBasePath();
 		loadSettings();
 	});
 </script>
@@ -57,7 +58,7 @@
 
 <div class="min-h-screen bg-surface-50-950 p-6">
 	<div class="max-w-2xl mx-auto">
-		<a href="/admin" class="text-primary-500 hover:underline mb-6 inline-block">
+		<a href={getBasePathUrl('/admin')} class="text-primary-500 hover:underline mb-6 inline-block">
 			← Назад к панели
 		</a>
 

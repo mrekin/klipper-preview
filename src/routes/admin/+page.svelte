@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import QRCode from '$lib/components/QRCode.svelte';
+	import { getBasePathUrl, getPublicUrl, getBasePath } from '$lib/config';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -37,6 +38,7 @@
 	let newTokenTtl = $state(60);
 	let newTokenComment = $state('');
 	let generatedToken = $state<Token | null>(null);
+	let generatedTokenUrl = $state('');
 	let copied = $state(false);
 	let validationMessage = $state('');
 
@@ -70,8 +72,8 @@
 	async function loadData() {
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
-				fetch('/api/tokens'),
-				fetch('/api/status')
+				fetch(getBasePathUrl('/api/tokens')),
+				fetch(getBasePathUrl('/api/status'))
 			]);
 
 			tokens = await tokensRes.json();
@@ -83,7 +85,7 @@
 
 	async function generateToken() {
 		try {
-			const res = await fetch('/api/tokens', {
+			const res = await fetch(getBasePathUrl('/api/tokens'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -93,6 +95,7 @@
 			});
 
 			generatedToken = await res.json();
+			generatedTokenUrl = await getPublicUrl(`/view?token=${generatedToken.token}`);
 			newTokenComment = ''; // Reset comment after generation
 			await loadData();
 		} catch (e) {
@@ -102,7 +105,7 @@
 
 	async function revokeToken(token: string) {
 		try {
-			await fetch('/api/tokens', {
+			await fetch(getBasePathUrl('/api/tokens'), {
 				method: 'DELETE',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ token })
@@ -114,8 +117,8 @@
 		}
 	}
 
-	function copyLink(token: string) {
-		const url = `${window.location.origin}/view/${token}`;
+	async function copyLink(token: string) {
+		const url = await getPublicUrl(`/view?token=${token}`);
 
 		// Try modern clipboard API first
 		if (navigator.clipboard && window.isSecureContext) {
@@ -174,7 +177,13 @@
 		newTokenTtl = validateTtl(newTokenTtl);
 	});
 
-	onMount(() => {
+	onMount(async () => {
+		// Предварительно загружаем base path
+		await getBasePath();
+
+		// Загружаем данные сразу
+		await loadData();
+
 		// Обновление статуса каждые 5 секунд
 		const interval = setInterval(loadData, 5000);
 		return () => clearInterval(interval);
@@ -252,7 +261,7 @@
 							<p class="text-surface-500">Нет данных</p>
 						{/if}
 
-						<a href="/admin/settings" class="mt-4 block text-sm text-primary-500 hover:underline">
+						<a href={getBasePathUrl('/admin/settings')} class="mt-4 block text-sm text-primary-500 hover:underline">
 							Настройки подключения →
 						</a>
 					</div>
@@ -319,7 +328,7 @@
 									<div>
 										<div class="flex items-center gap-2 mb-2">
 											<code class="flex-1 px-3 py-2 bg-surface-200-800 rounded text-sm break-all">
-												{browser ? window.location.origin : ''}/view/{generatedToken.token}
+												{generatedTokenUrl}
 											</code>
 											<button
 												class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
@@ -340,7 +349,7 @@
 									<div class="flex flex-col items-center justify-center">
 										<p class="text-sm text-surface-500 mb-2 text-center">QR-код для сканирования:</p>
 										<QRCode
-											text={`${browser ? window.location.origin : ''}/view/${generatedToken.token}`}
+											text={generatedTokenUrl}
 											size={200}
 										/>
 									</div>

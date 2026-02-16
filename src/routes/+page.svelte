@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	
-	onMount(() => {
-		goto('/admin');
+	import { getBasePathUrl, getBasePath } from '$lib/config';
+
+	onMount(async () => {
+		await getBasePath();
+		goto(getBasePathUrl('/admin'));
 	});
 </script>
 
