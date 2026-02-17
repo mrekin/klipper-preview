@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { getBasePathUrl, getBasePath } from '$lib/config';
 
 	let moonrakerUrl = $state('');
@@ -8,11 +9,19 @@
 	let saved = $state(false);
 	let error = $state('');
 
+	// Get base path from layout data
+	let basePath = $derived($page.data.basePath || '');
+
+	// Helper to build API URLs with base path
+	function apiUrl(path: string): string {
+		return basePath + path;
+	}
+
 	async function loadSettings() {
 		loading = true;
 		error = '';
 		try {
-			const res = await fetch(getBasePathUrl('/api/settings'));
+			const res = await fetch(apiUrl('/api/settings'));
 			if (!res.ok) throw new Error('Failed to load settings');
 			const data = await res.json();
 			moonrakerUrl = data.moonrakerUrl || '';
@@ -28,7 +37,7 @@
 		saving = true;
 		error = '';
 		try {
-			const res = await fetch(getBasePathUrl('/api/settings'), {
+			const res = await fetch(apiUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ moonrakerUrl })
@@ -47,8 +56,7 @@
 	}
 
 	onMount(async () => {
-		await getBasePath();
-		loadSettings();
+		await loadSettings();
 	});
 </script>
 
@@ -58,7 +66,7 @@
 
 <div class="min-h-screen bg-surface-50-950 p-6">
 	<div class="max-w-2xl mx-auto">
-		<a href={getBasePathUrl('/admin')} class="text-primary-500 hover:underline mb-6 inline-block">
+		<a href={apiUrl('/admin')} class="text-primary-500 hover:underline mb-6 inline-block">
 			← Назад к панели
 		</a>
 

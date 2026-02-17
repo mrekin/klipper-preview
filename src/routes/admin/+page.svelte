@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import QRCode from '$lib/components/QRCode.svelte';
 	import { getBasePathUrl, getPublicUrl, getBasePath } from '$lib/config';
 	import type { PageData } from './$types';
@@ -42,6 +43,21 @@
 	let copied = $state(false);
 	let validationMessage = $state('');
 
+	// Get base path from layout data (set by hooks.server.ts from X-Base-Path header)
+	let basePath = $derived($page.data.basePath || '');
+
+	// Helper to build API URLs with base path
+	function apiUrl(path: string): string {
+		return basePath + path;
+	}
+
+	// Helper to build public URLs with base path
+	function publicUrl(path: string): string {
+		if (typeof window === 'undefined') return path;
+		const cleanPath = path.startsWith('/') ? path : '/' + path;
+		return window.location.origin + basePath + cleanPath;
+	}
+
 	// Предустановленные варианты TTL
 	const ttlOptions = [
 		{ value: 30, label: '30 мин' },
@@ -72,8 +88,8 @@
 	async function loadData() {
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
-				fetch(getBasePathUrl('/api/tokens')),
-				fetch(getBasePathUrl('/api/status'))
+				fetch(apiUrl('/api/tokens')),
+				fetch(apiUrl('/api/status'))
 			]);
 
 			tokens = await tokensRes.json();
@@ -85,7 +101,7 @@
 
 	async function generateToken() {
 		try {
-			const res = await fetch(getBasePathUrl('/api/tokens'), {
+			const res = await fetch(apiUrl('/api/tokens'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -95,7 +111,7 @@
 			});
 
 			generatedToken = await res.json();
-			generatedTokenUrl = await getPublicUrl(`/view?token=${generatedToken.token}`);
+			generatedTokenUrl = publicUrl(`/view?token=${generatedToken.token}`);
 			newTokenComment = ''; // Reset comment after generation
 			await loadData();
 		} catch (e) {
@@ -105,7 +121,7 @@
 
 	async function revokeToken(token: string) {
 		try {
-			await fetch(getBasePathUrl('/api/tokens'), {
+			await fetch(apiUrl('/api/tokens'), {
 				method: 'DELETE',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ token })
@@ -118,7 +134,7 @@
 	}
 
 	async function copyLink(token: string) {
-		const url = await getPublicUrl(`/view?token=${token}`);
+		const url = publicUrl(`/view?token=${token}`);
 
 		// Try modern clipboard API first
 		if (navigator.clipboard && window.isSecureContext) {
@@ -178,10 +194,7 @@
 	});
 
 	onMount(async () => {
-		// Предварительно загружаем base path
-		await getBasePath();
-
-		// Загружаем данные сразу
+		// Загружаем данные сразу (basePath уже есть в $page.data)
 		await loadData();
 
 		// Обновление статуса каждые 5 секунд
@@ -261,7 +274,7 @@
 							<p class="text-surface-500">Нет данных</p>
 						{/if}
 
-						<a href={getBasePathUrl('/admin/settings')} class="mt-4 block text-sm text-primary-500 hover:underline">
+						<a href={apiUrl('/admin/settings')} class="mt-4 block text-sm text-primary-500 hover:underline">
 							Настройки подключения →
 						</a>
 					</div>

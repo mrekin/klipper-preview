@@ -37,6 +37,14 @@
 
 	let currentFilename = $derived.by(() => status?.filename ?? null);
 
+	// Get base path from layout data
+	let basePath = $derived($page.data.basePath || '');
+
+	// Helper to build API URLs with base path
+	function apiUrl(path: string): string {
+		return basePath + path;
+	}
+
 	async function loadStatus() {
 		if (!token) {
 			error = 'Токен не указан';
@@ -45,7 +53,7 @@
 		}
 
 		try {
-			const res = await fetch(getBasePathUrl(`/api/status?token=${token}`));
+			const res = await fetch(apiUrl(`/api/status?token=${token}`));
 
 			if (!res.ok) {
 				if (res.status === 403) {
@@ -68,7 +76,7 @@
 		}
 
 		try {
-			const res = await fetch(getBasePathUrl(`/api/gcode/${token}?file=${encodeURIComponent(filename)}`));
+			const res = await fetch(apiUrl(`/api/gcode/${token}?file=${encodeURIComponent(filename)}`));
 
 			if (res.ok) {
 				const data = await res.json();
@@ -133,9 +141,6 @@
 	// Запускаем только в браузере
 	if (browser) {
 		(async () => {
-			// Предварительно загружаем base path
-			await getBasePath();
-
 			// Проверяем наличие токена
 			if (!token) {
 				error = 'Токен не указан';
@@ -145,7 +150,7 @@
 
 			// Загружаем информацию о токене
 			try {
-				const res = await fetch(getBasePathUrl(`/api/token/${token}?noCache=true`));
+				const res = await fetch(apiUrl(`/api/token/${token}?noCache=true`));
 				if (res.ok) {
 					tokenData = await res.json();
 				}
