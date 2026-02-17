@@ -89,7 +89,7 @@
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
 				fetch(apiUrl('/api/tokens')),
-				fetch(apiUrl('/api/status'))
+				fetch(apiUrl('/api/admin/status'))
 			]);
 
 			tokens = await tokensRes.json();
