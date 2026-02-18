@@ -1,42 +1,65 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import QRCode from 'qrcode';
 	import type { QRCodeToDataURLOptions } from 'qrcode';
 
-	interface Props {
+	let {
+		text,
+		size = 200
+	}: {
 		text: string;
 		size?: number;
-	}
+	} = $props();
 
-	let { text, size = 200 }: Props = $props();
+	let dataUrl = $state('');
+	let loading = $state(true);
+	let error = $state<string | null>(null);
 
-	let dataUrl: string = $state('');
-	let error: string | null = $state(null);
-
-	onMount(async () => {
-		try {
-			const options: QRCodeToDataURLOptions = {
-				width: size,
-				margin: 2,
-				color: {
-					dark: '#000000',
-					light: '#ffffff'
-				}
-			};
-			dataUrl = await QRCode.toDataURL(text, options);
-		} catch (e) {
-			error = 'Failed to generate QR code';
-			console.error('QR Code generation error:', e);
+	// Используем $effect для реактивной генерации QR-кода
+	$effect(() => {
+		if (!text) {
+			error = 'No text provided';
+			loading = false;
+			return;
 		}
+
+		console.log('[QRCode] Generating for:', text);
+
+		// Сбрасываем состояние при изменении text
+		dataUrl = '';
+		loading = true;
+		error = null;
+
+		QRCode.toDataURL(text, {
+			width: size,
+			margin: 2,
+			color: {
+				dark: '#000000',
+				light: '#ffffff'
+			}
+		} as QRCodeToDataURLOptions)
+			.then((url) => {
+				dataUrl = url;
+				loading = false;
+				console.log('[QRCode] Success, length:', url.length);
+			})
+			.catch((e) => {
+				error = 'Failed to generate QR';
+				loading = false;
+				console.error('[QRCode] Error:', e);
+			});
 	});
 </script>
 
-{#if error}
-	<div class="flex items-center justify-center p-4 bg-red-500/10 rounded-lg">
-		<span class="text-red-500 text-sm">{error}</span>
-	</div>
-{:else if dataUrl}
-	<div class="inline-block bg-white p-2 rounded-lg shadow-md">
+<div class="inline-block bg-white p-2 rounded-lg shadow-md">
+	{#if loading}
+		<div style="width: {size}px; height: {size}px;" class="flex items-center justify-center bg-surface-100">
+			<span class="text-sm text-surface-500">Loading...</span>
+		</div>
+	{:else if error}
+		<div style="width: {size}px; height: {size}px;" class="flex items-center justify-center bg-red-500/10">
+			<span class="text-sm text-red-500">Error</span>
+		</div>
+	{:else}
 		<img src={dataUrl} alt="QR Code" style="width: {size}px; height: {size}px;" />
-	</div>
-{/if}
+	{/if}
+</div>

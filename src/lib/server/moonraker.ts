@@ -1,8 +1,9 @@
 import { env } from '$env/dynamic/private';
 import { getMoonrakerUrlSetting } from './tokens';
 // Получение URL Moonraker из БД или переменной окружения
+// БД имеет приоритет над переменной окружения
 export function getMoonrakerUrl(): string {
-	return env.MOONRAKER_URL || getMoonrakerUrlSetting();
+	return getMoonrakerUrlSetting() || env.MOONRAKER_URL;
 }
 
 
@@ -44,6 +45,7 @@ const mockStatus: PrinterStatus = {
 export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 	try {
 		const url = getMoonrakerUrl();
+		console.log('[fetchPrinterStatus] Fetching from Moonraker URL:', url);
 
 		// Запрос к Moonraker API для статуса
 		const response = await fetch(
@@ -51,11 +53,14 @@ export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 			{ signal: AbortSignal.timeout(5000) }
 		);
 
+		console.log('[fetchPrinterStatus] Response status:', response.status);
+
 		if (!response.ok) {
 			throw new Error(`Moonraker error: ${response.status}`);
 		}
 
 		const data = await response.json();
+		console.log('[fetchPrinterStatus] Response data:', JSON.stringify(data).substring(0, 500));
 		const result = data.result?.status;
 
 		if (!result) {
@@ -68,6 +73,8 @@ export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 		const extruder = result.extruder || {};
 		const heaterBed = result.heater_bed || {};
 		const toolhead = result.toolhead || {};
+
+		console.log('[fetchPrinterStatus] Parsed status - state:', printStats.state, 'filename:', printStats.filename);
 
 		// Получаем метаданные текущего файла
 		let layerCount = 100;
@@ -117,7 +124,7 @@ export async function fetchPrinterStatus(): Promise<PrinterStatus> {
 			}
 		};
 	} catch (error) {
-		console.error('Moonraker fetch error:', error);
+		console.error('[fetchPrinterStatus] ERROR - returning mock data:', error);
 		// Возвращаем mock-данные при ошибке
 		return {
 			...mockStatus,

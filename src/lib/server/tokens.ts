@@ -46,6 +46,9 @@ export interface Setting {
 const MOONRAKER_URL_KEY = 'moonraker_url';
 const DEFAULT_MOONRAKER_URL = 'http://192.168.1.100:7125';
 
+// Настройки публичного URL
+const PUBLIC_URL_KEY = 'public_url';
+
 // Получение значения настройки
 export function getSetting(key: string): string | null {
 	const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -67,6 +70,16 @@ export function getMoonrakerUrlSetting(): string {
 // Сохранение URL Moonraker
 export function setMoonrakerUrlSetting(url: string): void {
 	setSetting(MOONRAKER_URL_KEY, url);
+}
+
+// Получение публичного URL
+export function getPublicUrlSetting(): string | null {
+	return getSetting(PUBLIC_URL_KEY);
+}
+
+// Сохранение публичного URL
+export function setPublicUrlSetting(url: string): void {
+	setSetting(PUBLIC_URL_KEY, url);
 }
 
 export interface Token {

@@ -1,6 +1,6 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { validateToken } from '$lib/server/tokens';
-import { setServerBasePath } from '$lib/config';
+import { validateToken, getPublicUrlSetting } from '$lib/server/tokens';
+import { setServerBasePath, setPublicUrl } from '$lib/config';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Read base path from X-Base-Path header set by Caddy
@@ -10,6 +10,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Store base path for server-side use
 	setServerBasePath(basePath);
 	(event.locals as any).basePath = basePath;
+
+	// Load public URL from DB and store for server-side use
+	const publicUrl = getPublicUrlSetting() || '';
+	setPublicUrl(publicUrl);
+	(event.locals as any).publicUrl = publicUrl;
 
 	const pathname = event.url.pathname;
 

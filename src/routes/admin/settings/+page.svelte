@@ -1,9 +1,17 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { getBasePathUrl, getBasePath } from '$lib/config';
+	import type { PageData } from './$types';
 
-	let moonrakerUrl = $state('');
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
+
+	let moonrakerUrl = $state(data.moonrakerUrl || '');
+	let publicUrl = $state(data.publicUrl || '');
+	let urlValidationMessage = $state('');
 	let loading = $state(false);
 	let saving = $state(false);
 	let saved = $state(false);
@@ -17,47 +25,65 @@
 		return basePath + path;
 	}
 
-	async function loadSettings() {
-		loading = true;
-		error = '';
+	// Helper function to update state safely
+	function updateState(newMoonrakerUrl: string, newPublicUrl: string) {
+		moonrakerUrl = newMoonrakerUrl;
+		publicUrl = newPublicUrl;
+	}
+
+	// Валидация публичного URL
+	function isValidPublicUrl(url: string): boolean {
+		if (!url) return true; // Пустое значение - валидно (отключение)
 		try {
-			const res = await fetch(apiUrl('/api/settings'));
-			if (!res.ok) throw new Error('Failed to load settings');
-			const data = await res.json();
-			moonrakerUrl = data.moonrakerUrl || '';
-		} catch (e) {
-			error = 'Ошибка загрузки настроек';
-			console.error('Load settings error:', e);
-		} finally {
-			loading = false;
+			new URL(url);
+			return url.startsWith('http://') || url.startsWith('https://');
+		} catch {
+			return false;
 		}
 	}
 
+	function validateUrl(url: string): void {
+		if (url && !isValidPublicUrl(url)) {
+			urlValidationMessage = 'URL должен начинаться с http:// или https://';
+		} else {
+			urlValidationMessage = '';
+		}
+	}
+
+	// Реактивная валидация
+	$effect(() => {
+		validateUrl(publicUrl);
+	});
+
 	async function save() {
+		if (urlValidationMessage) {
+			error = 'Исправьте ошибки перед сохранением';
+			return;
+		}
+
 		saving = true;
 		error = '';
 		try {
 			const res = await fetch(apiUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ moonrakerUrl })
+				body: JSON.stringify({ moonrakerUrl, publicUrl })
 			});
 
-			if (!res.ok) throw new Error('Failed to save settings');
+			if (!res.ok) {
+				const errorData = await res.json();
+				throw new Error(errorData.error || 'Failed to save settings');
+			}
 
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
-		} catch (e) {
-			error = 'Ошибка сохранения настроек';
+		} catch (e: any) {
+			error = e.message || 'Ошибка сохранения настроек';
 			console.error('Save settings error:', e);
 		} finally {
 			saving = false;
 		}
 	}
-
-	onMount(async () => {
-		await loadSettings();
-	});
 </script>
 
 <svelte:head>
@@ -98,20 +124,59 @@
 						IP-адрес и порт Moonraker в локальной сети
 					</p>
 				</div>
-
-				<button
-					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={save}
-					disabled={loading || saving || !moonrakerUrl}
-				>
-					{saving ? 'Сохранение...' : 'Сохранить'}
-				</button>
-
-				{#if saved}
-					<p class="text-green-500">Настройки сохранены!</p>
-				{/if}
 			</div>
 		</div>
+
+		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mt-6">
+			<h2 class="text-lg font-semibold mb-4">Публичные ссылки</h2>
+
+			<div class="space-y-4">
+				<div>
+					<label for="public-url" class="block text-sm text-surface-500 mb-2"
+						>Публичный URL</label
+					>
+					<input
+						id="public-url"
+						type="text"
+						bind:value={publicUrl}
+						disabled={loading || saving}
+						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
+						placeholder="https://mydomain.ru/klippershare"
+					/>
+					<p class="text-sm text-surface-500 mt-2">
+						Полный URL, по которому пользователи будут открывать preview страницу
+					</p>
+					<p class="text-sm text-surface-500 mt-1">
+						Если поле пустое - используется текущий адрес админки
+					</p>
+					<p class="text-xs text-surface-600 mt-2">
+						Примеры: https://mydomain.ru/klippershare, http://192.168.1.100:8080/print
+					</p>
+					{#if urlValidationMessage}
+						<p class="text-sm text-orange-500 mt-2">
+							{urlValidationMessage}
+						</p>
+					{/if}
+				</div>
+			</div>
+		</div>
+
+		<!-- Save button block -->
+		<div class="mt-8 flex justify-end">
+			<button
+				class="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed text-lg"
+				onclick={save}
+				disabled={loading || saving || urlValidationMessage !== ''}
+			>
+				{saving ? 'Сохранение...' : 'Сохранить настройки'}
+			</button>
+		</div>
+
+		{#if saved}
+			<div class="mt-4 p-4 bg-green-500/10 text-green-500 rounded-lg text-center">
+				✓ Настройки сохранены!
+			</div>
+		{/if}
 
 		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mt-6">
 			<h2 class="text-lg font-semibold mb-4">Информация</h2>

@@ -1,6 +1,9 @@
 // Server-side base path storage (set from X-Base-Path header)
 let serverBasePath: string = '';
 
+// Server-side public URL storage (loaded from DB)
+let serverPublicUrl: string = '';
+
 /**
  * Initialize base path from current URL (client-side only)
  * Called on page load to avoid waiting for API
@@ -46,6 +49,29 @@ if (typeof window !== 'undefined') {
  */
 export function setServerBasePath(path: string): void {
 	serverBasePath = path;
+}
+
+/**
+ * Set the public URL on server side from database
+ * Called by hooks.server.ts
+ */
+export function setPublicUrl(url: string): void {
+	serverPublicUrl = url;
+	if (typeof window !== 'undefined') {
+		window.__PUBLIC_URL__ = url;
+	}
+}
+
+/**
+ * Get the public URL setting
+ * Client-side: from window.__PUBLIC_URL__ (set by layout)
+ * Server-side: from serverPublicUrl (set by hooks.server.ts)
+ */
+export function getPublicUrlSetting(): string {
+	if (typeof window !== 'undefined') {
+		return window.__PUBLIC_URL__ || '';
+	}
+	return serverPublicUrl;
 }
 
 /**
@@ -104,12 +130,12 @@ export function getBasePathUrl(path: string): string {
 
 /**
  * Build a complete public URL for a given path
- * Combines window.location.origin + base path + relative path
+ * Uses public URL setting if configured, otherwise falls back to window.location.origin + base path
  * Used for generating shareable links, QR codes, etc.
  *
  * Examples:
- *   getPublicUrl('/view/abc123') -> 'https://example.com/klipper/view/abc123'
- *   getPublicUrl('/view/abc123') -> 'https://example.com/view/abc123' (no base path)
+ *   getPublicUrl('/view/abc123') -> 'https://mydomain.ru/klippershare/view/abc123' (with public URL)
+ *   getPublicUrl('/view/abc123') -> 'https://example.com/klipper/view/abc123' (fallback)
  */
 export async function getPublicUrl(path: string): Promise<string> {
 	if (typeof window === 'undefined') {
@@ -117,14 +143,22 @@ export async function getPublicUrl(path: string): Promise<string> {
 		return path;
 	}
 
-	const basePath = await getBasePath();
+	const publicUrl = getPublicUrlSetting();
 	const cleanPath = path.startsWith('/') ? path : '/' + path;
+
+	// Use public URL if configured, otherwise use current origin + basePath
+	if (publicUrl) {
+		return publicUrl + cleanPath;
+	}
+
+	const basePath = await getBasePath();
 	return window.location.origin + basePath + cleanPath;
 }
 
-// Extend window interface for base path cache
+// Extend window interface for base path cache and public URL
 declare global {
 	interface Window {
 		__BASE_PATH__?: string;
+		__PUBLIC_URL__?: string;
 	}
 }

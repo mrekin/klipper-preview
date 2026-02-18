@@ -55,6 +55,13 @@
 	function publicUrl(path: string): string {
 		if (typeof window === 'undefined') return path;
 		const cleanPath = path.startsWith('/') ? path : '/' + path;
+
+		// Use public URL setting if configured, otherwise use current origin + basePath
+		const publicUrlSetting = ($page.data.publicUrl as string) || '';
+		if (publicUrlSetting) {
+			return publicUrlSetting + cleanPath;
+		}
+
 		return window.location.origin + basePath + cleanPath;
 	}
 
