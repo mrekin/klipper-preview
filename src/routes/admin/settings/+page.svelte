@@ -18,6 +18,7 @@
 		is_default: boolean;
 		token_count?: number;
 		last_error?: string | null;
+		thumbnail_sizes?: string | null;
 	}
 
 	let moonrakerUrl = $state(data.moonrakerUrl || '');
@@ -173,6 +174,7 @@
 		name: string;
 		moonraker_url: string;
 		is_default: boolean;
+		thumbnail_sizes?: string;
 	}) {
 		saving = true;
 		error = '';

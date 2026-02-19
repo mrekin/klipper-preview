@@ -4,7 +4,8 @@ import {
 	getAllPrinters,
 	createPrinter,
 	getPrinterMoonrakerUrl,
-	clearPrinterError
+	clearPrinterError,
+	DEFAULT_THUMBNAIL_SIZES
 } from '$lib/server/printers';
 
 // GET /api/printers - Get all printers
@@ -22,7 +23,7 @@ export const GET: RequestHandler = async () => {
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const body = await request.json();
-		const { name, moonraker_url, is_default } = body;
+		const { name, moonraker_url, is_default, thumbnail_sizes } = body;
 
 		// Validation
 		if (!name || typeof name !== 'string') {
@@ -31,6 +32,29 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (!moonraker_url || typeof moonraker_url !== 'string') {
 			return json({ error: 'Moonraker URL is required' }, { status: 400 });
+		}
+
+		// Validate thumbnail_sizes (if provided)
+		if (thumbnail_sizes !== undefined && thumbnail_sizes !== null && thumbnail_sizes !== '') {
+			if (typeof thumbnail_sizes !== 'string') {
+				return json({ error: 'Thumbnail sizes must be a string' }, { status: 400 });
+			}
+
+			// Parse and validate format
+			try {
+				const sizes = thumbnail_sizes.split(',').map((s: string) => s.trim());
+				const sizeRegex = /^\d+x\d+$/;
+
+				for (const size of sizes) {
+					if (!sizeRegex.test(size)) {
+						return json({
+							error: `Invalid size format: "${size}". Use format like "256x256"`
+						}, { status: 400 });
+					}
+				}
+			} catch (e) {
+				return json({ error: 'Invalid thumbnail sizes format' }, { status: 400 });
+			}
 		}
 
 		// Validate URL format
@@ -59,7 +83,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Cannot connect to Moonraker at provided URL' }, { status: 400 });
 		}
 
-		const printer = createPrinter(name, moonraker_url, is_default);
+		const printer = createPrinter(name, moonraker_url, is_default, thumbnail_sizes || null);
 
 		// Clear error if connection was successful
 		if (connectionOk) {

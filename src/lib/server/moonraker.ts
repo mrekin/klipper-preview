@@ -55,7 +55,7 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 
 		// Запрос к Moonraker API для статуса
 		const response = await fetch(
-			`${url}/printer/objects/query?display_status&print_stats&heater_bed&extruder&toolhead`,
+			`${url}/printer/objects/query?display_status&print_stats&print_stats.info&heater_bed&extruder&toolhead`,
 			{ signal: AbortSignal.timeout(5000) }
 		);
 
@@ -76,32 +76,48 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 		// Парсинг ответа Moonraker
 		const displayStatus = result.display_status || {};
 		const printStats = result.print_stats || {};
+		const printStatsInfo = printStats.info || {};
 		const extruder = result.extruder || {};
 		const heaterBed = result.heater_bed || {};
 		const toolhead = result.toolhead || {};
 
 		console.log('[fetchPrinterStatus] Parsed status - state:', printStats.state, 'filename:', printStats.filename);
 
-		// Получаем метаданные текущего файла
-		let layerCount = 100;
+		// Приоритет: используем точные данные из print_stats.info
+		let currentLayer: number;
+		let totalLayers: number;
 		const filename = printStats.filename || '';
-		if (filename) {
-			try {
-				const metadataResponse = await fetch(
-					`${url}/server/files/metadata?filename=${encodeURIComponent(filename)}`,
-					{ signal: AbortSignal.timeout(3000) }
-				);
-				if (metadataResponse.ok) {
-					const metadataData = await metadataResponse.json();
-					layerCount = metadataData.result?.layer_count || 100;
-				}
-			} catch (e) {
-				console.warn('Failed to fetch file metadata:', e);
-			}
-		}
 
-		// Расчёт текущего слоя
-		const currentLayer = Math.floor((displayStatus.progress || 0) * layerCount);
+		const hasLayerInfo = printStatsInfo.current_layer && printStatsInfo.current_layer > 0;
+
+		if (hasLayerInfo) {
+			// Современный G-code с layer information
+			currentLayer = printStatsInfo.current_layer;
+			totalLayers = printStatsInfo.total_layer || 0;
+			console.log('[fetchPrinterStatus] Using print_stats.info - layer:', currentLayer, 'total:', totalLayers);
+		} else {
+			// Fallback: старый G-code без layer information
+			let layerCount = 100;
+			if (filename) {
+				try {
+					const metadataResponse = await fetch(
+						`${url}/server/files/metadata?filename=${encodeURIComponent(filename)}`,
+						{ signal: AbortSignal.timeout(3000) }
+					);
+					if (metadataResponse.ok) {
+						const metadataData = await metadataResponse.json();
+						layerCount = metadataData.result?.layer_count || 100;
+						console.log('[fetchPrinterStatus] Using metadata - layer_count:', layerCount);
+					}
+				} catch (e) {
+					console.warn('[fetchPrinterStatus] Failed to fetch file metadata:', e);
+				}
+			}
+
+			currentLayer = Math.floor((displayStatus.progress || 0) * layerCount);
+			totalLayers = layerCount;
+			console.log('[fetchPrinterStatus] Using fallback - calculated layer:', currentLayer, 'total:', totalLayers);
+		}
 
 		// Получаем оценку времени печати из метаданных или используем текущее время как fallback
 		let estimatedTime = printStats.estimated_time || 0;
@@ -121,8 +137,8 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 			bed_temp: heaterBed.temperature || 0,
 			bed_target: heaterBed.target || 0,
 			current_layer: currentLayer,
-			total_layers: layerCount,
-			layer_count: layerCount,
+			total_layers: totalLayers,
+			layer_count: totalLayers,
 			position: {
 				x: toolhead.position?.[0] || 0,
 				y: toolhead.position?.[1] || 0,

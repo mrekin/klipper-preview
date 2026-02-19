@@ -37,7 +37,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 		}
 
 		const body = await request.json();
-		const { name, moonraker_url, is_default } = body;
+		const { name, moonraker_url, is_default, thumbnail_sizes } = body;
 
 		// Validation
 		if (!name || typeof name !== 'string') {
@@ -46,6 +46,29 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 
 		if (!moonraker_url || typeof moonraker_url !== 'string') {
 			return json({ error: 'Moonraker URL is required' }, { status: 400 });
+		}
+
+		// Validate thumbnail_sizes (if provided)
+		if (thumbnail_sizes !== undefined && thumbnail_sizes !== null && thumbnail_sizes !== '') {
+			if (typeof thumbnail_sizes !== 'string') {
+				return json({ error: 'Thumbnail sizes must be a string' }, { status: 400 });
+			}
+
+			// Parse and validate format
+			try {
+				const sizes = thumbnail_sizes.split(',').map((s: string) => s.trim());
+				const sizeRegex = /^\d+x\d+$/;
+
+				for (const size of sizes) {
+					if (!sizeRegex.test(size)) {
+						return json({
+							error: `Invalid size format: "${size}". Use format like "256x256"`
+						}, { status: 400 });
+					}
+				}
+			} catch (e) {
+				return json({ error: 'Invalid thumbnail sizes format' }, { status: 400 });
+			}
 		}
 
 		// Validate URL format
@@ -74,7 +97,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Cannot connect to Moonraker at provided URL' }, { status: 400 });
 		}
 
-		const success = updatePrinter(id, name, moonraker_url, is_default);
+		const success = updatePrinter(id, name, moonraker_url, is_default, thumbnail_sizes || null);
 		if (!success) {
 			return json({ error: 'Printer not found' }, { status: 404 });
 		}

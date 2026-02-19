@@ -80,11 +80,18 @@ function initializeDatabase() {
 		}
 	} else {
 		// Migrate existing printers table - add last_error column if not exists
-		const printersColumns = db.pragma('table_info(printers)');
+		const printersColumns = db.pragma('table_info(printers)') as any[];
 		const hasLastError = printersColumns.some((col: any) => col.name === 'last_error');
 
 		if (!hasLastError) {
 			db.exec(`ALTER TABLE printers ADD COLUMN last_error TEXT`);
+		}
+
+		// Add thumbnail_sizes column if not exists
+		const hasThumbnailSizes = printersColumns.some((col: any) => col.name === 'thumbnail_sizes');
+
+		if (!hasThumbnailSizes) {
+			db.exec(`ALTER TABLE printers ADD COLUMN thumbnail_sizes TEXT`);
 		}
 	}
 
@@ -221,6 +228,11 @@ export function getToken(token: string): Token | null {
 export function validateToken(token: string): boolean {
 	const t = getToken(token);
 	if (!t) return false;
+
+	// Проверка отзыва
+	if (t.revoked) {
+		return false;
+	}
 
 	// Проверка истечения
 	if (Date.now() > t.expires_at) {

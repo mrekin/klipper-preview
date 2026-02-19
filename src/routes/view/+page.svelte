@@ -32,6 +32,8 @@
 	let token: string = $derived($page.url.searchParams.get('token') || '');
 	let tokenData: TokenData | null = $state(null);
 	let loadedFilename: string | null = $state(null);
+	let thumbnailVisible = $state(true);
+	let thumbnailError = $state(false);
 
 	let updateInterval: ReturnType<typeof setInterval> | undefined = undefined;
 
@@ -39,6 +41,21 @@
 
 	// Get base path from layout data
 	let basePath = $derived($page.data.basePath || '');
+
+	// Get thumbnail URL
+	let thumbnailUrl = $derived.by(() => {
+		if (!status?.filename || !thumbnailVisible || thumbnailError) {
+			return '';
+		}
+		const filename = encodeURIComponent(status.filename);
+		return apiUrl(`/api/thumbnail/${token}?filename=${filename}`);
+	});
+
+	// Handle thumbnail error
+	function handleThumbnailError() {
+		thumbnailError = true;
+		thumbnailVisible = false;
+	}
 
 	// Helper to build API URLs with base path
 	function apiUrl(path: string): string {
@@ -134,6 +151,11 @@
 
 	$effect(() => {
 		if (currentFilename) {
+			// Reset thumbnail error when file changes
+			if (currentFilename !== loadedFilename) {
+				thumbnailError = false;
+				thumbnailVisible = true;
+			}
 			loadGcode(currentFilename);
 		}
 	});
@@ -205,6 +227,20 @@
 					<!-- Progress -->
 					<div class="bg-surface-100-900 rounded-xl p-5 border border-surface-200-800">
 						<h2 class="text-lg font-semibold mb-4">Прогресс</h2>
+
+						<!-- Thumbnail image -->
+						{#if thumbnailVisible && thumbnailUrl}
+							<div class="mb-4 flex justify-center">
+								<img
+									src={thumbnailUrl}
+									alt="Model preview"
+									class="max-w-full h-auto rounded-lg border border-surface-200-800"
+									style="max-width: 400px;"
+									onerror={handleThumbnailError}
+									loading="lazy"
+								/>
+							</div>
+						{/if}
 
 						<!-- Progress bar -->
 						<div class="mb-4">
