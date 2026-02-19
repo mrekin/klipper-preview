@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { fetchPrinterStatus } from '$lib/server/moonraker';
-import { validateToken } from '$lib/server/tokens';
+import { validateToken, getToken } from '$lib/server/tokens';
 
 export const GET: RequestHandler = async ({ url }) => {
 	// Токен передаётся как query-параметр
@@ -18,7 +18,11 @@ export const GET: RequestHandler = async ({ url }) => {
 	}
 
 	try {
-		const status = await fetchPrinterStatus();
+		// Get token data to extract printer_id
+		const tokenData = getToken(token);
+		const printerId = tokenData?.printer_id || undefined;
+
+		const status = await fetchPrinterStatus(printerId);
 		return json(status);
 	} catch (error) {
 		return json({ error: 'Failed to fetch printer status' }, { status: 500 });

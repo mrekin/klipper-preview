@@ -1,8 +1,14 @@
 import { env } from '$env/dynamic/private';
-import { getMoonrakerUrlSetting } from './tokens';
+import { getMoonrakerUrlSetting, getSetting } from './tokens';
+import { getPrinterMoonrakerUrl } from './printers';
+
 // Получение URL Moonraker из БД или переменной окружения
 // БД имеет приоритет над переменной окружения
-export function getMoonrakerUrl(): string {
+export function getMoonrakerUrl(printerId?: number): string {
+	if (printerId !== undefined) {
+		const url = getPrinterMoonrakerUrl(printerId);
+		if (url) return url;
+	}
 	return getMoonrakerUrlSetting() || env.MOONRAKER_URL;
 }
 
@@ -42,10 +48,10 @@ const mockStatus: PrinterStatus = {
 };
 
 // Функция запроса статуса из Moonraker
-export async function fetchPrinterStatus(): Promise<PrinterStatus> {
+export async function fetchPrinterStatus(printerId?: number): Promise<PrinterStatus> {
 	try {
-		const url = getMoonrakerUrl();
-		console.log('[fetchPrinterStatus] Fetching from Moonraker URL:', url);
+		const url = getMoonrakerUrl(printerId);
+		console.log('[fetchPrinterStatus] Fetching from Moonraker URL:', url, 'printerId:', printerId);
 
 		// Запрос к Moonraker API для статуса
 		const response = await fetch(
@@ -160,9 +166,9 @@ export function formatDuration(seconds: number): string {
 }
 
 // Получение G-code файла
-export async function fetchGcode(filename: string): Promise<string | null> {
+export async function fetchGcode(filename: string, printerId?: number): Promise<string | null> {
 	try {
-		const url = getMoonrakerUrl();
+		const url = getMoonrakerUrl(printerId);
 		const response = await fetch(`${url}/server/files/gcodes/${encodeURIComponent(filename)}`);
 
 		if (!response.ok) {

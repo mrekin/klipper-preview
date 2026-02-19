@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	}
 	
 	try {
-		const gcode = await fetchGcode(filename);
+		const gcode = await fetchGcode(filename, tokenData?.printer_id || undefined);
 		
 		if (!gcode) {
 			return json({ error: 'G-code file not found' }, { status: 404 });

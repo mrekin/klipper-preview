@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import QRCode from '$lib/components/QRCode.svelte';
-	import { getBasePathUrl, getPublicUrl, getBasePath } from '$lib/config';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -21,6 +19,8 @@
 		filename: string | null;
 		comment: string | null;
 		revoked: boolean;
+		printer_id: number | null;
+		printer_name?: string;
 	}
 
 	interface PrinterStatus {
@@ -33,8 +33,17 @@
 		bed_target: number;
 	}
 
-	let tokens = $state<Token[]>(data.tokens);
-	let status = $state<PrinterStatus | null>(data.status);
+	interface Printer {
+		id: number;
+		name: string;
+		moonraker_url: string;
+		created_at: number;
+		is_default: boolean;
+	}
+
+	let printers = $state<Printer[]>([]);
+	let tokens = $state<Token[]>([]);
+	let status = $state<PrinterStatus | null>(null);
 	let loading = $state(false);
 	let newTokenTtl = $state(60);
 	let newTokenComment = $state('');
@@ -42,8 +51,9 @@
 	let generatedTokenUrl = $state('');
 	let copied = $state(false);
 	let validationMessage = $state('');
+	let initialized = $state(false);
 
-	// Get base path from layout data (set by hooks.server.ts from X-Base-Path header)
+	// Get base path from layout data
 	let basePath = $derived($page.data.basePath || '');
 
 	// Helper to build API URLs with base path
@@ -52,20 +62,42 @@
 	}
 
 	// Helper to build public URLs with base path
+	// Cache the value to avoid recalculating on every render
+	let cachedPublicUrl = $state<string | null>(null);
+
 	function publicUrl(path: string): string {
 		if (typeof window === 'undefined') return path;
 		const cleanPath = path.startsWith('/') ? path : '/' + path;
 
-		// Use public URL setting if configured, otherwise use current origin + basePath
-		const publicUrlSetting = ($page.data.publicUrl as string) || '';
+		// Priority 1: Window cache (most up-to-date after settings change)
+		const windowPublicUrl = (window as any).__PUBLIC_URL__;
+		if (windowPublicUrl) {
+			return windowPublicUrl + cleanPath;
+		}
+
+		// Priority 2: Layout data (may be stale until reload)
+		const publicUrlSetting = cachedPublicUrl || ($page.data.publicUrl as string) || '';
 		if (publicUrlSetting) {
 			return publicUrlSetting + cleanPath;
 		}
 
+		// Priority 3: Fallback to current origin
 		return window.location.origin + basePath + cleanPath;
 	}
 
-	// Предустановленные варианты TTL
+	// Update cache when page data changes
+	$effect(() => {
+		cachedPublicUrl = ($page.data.publicUrl as string) || null;
+	});
+
+	// Derive selected printer from URL (source of truth!)
+	let selectedPrinterId = $derived(
+		$page.url.searchParams.get('printer')
+			? parseInt($page.url.searchParams.get('printer')!)
+			: null
+	);
+
+	// TTL options
 	const ttlOptions = [
 		{ value: 30, label: '30 мин' },
 		{ value: 60, label: '1 час' },
@@ -76,7 +108,7 @@
 		{ value: 360, label: '6 часов' },
 		{ value: 480, label: '8 часов' },
 		{ value: 720, label: '12 часов' },
-		{ value: 1440, label: '24 часа' },
+		{ value: 1440, label: '24 часа' }
 	];
 
 	function validateTtl(value: number): number {
@@ -92,11 +124,28 @@
 		return value;
 	}
 
+	async function loadPrinters() {
+		try {
+			console.log('[Admin] loadPrinters: fetching printers...');
+			const res = await fetch(apiUrl('/api/printers'));
+			if (res.ok) {
+				printers = await res.json();
+				console.log('[Admin] loadPrinters: printers loaded:', printers.length);
+				initialized = true;
+				console.log('[Admin] loadPrinters: initialized = true');
+			}
+		} catch (e) {
+			console.error('[Admin] Error loading printers:', e);
+		}
+	}
+
 	async function loadData() {
+		if (selectedPrinterId === null) return;
+
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
-				fetch(apiUrl('/api/tokens')),
-				fetch(apiUrl('/api/admin/status'))
+				fetch(apiUrl(`/api/tokens?printer_id=${selectedPrinterId}`)),
+				fetch(apiUrl(`/api/admin/status?printer_id=${selectedPrinterId}`))
 			]);
 
 			tokens = await tokensRes.json();
@@ -107,19 +156,23 @@
 	}
 
 	async function generateToken() {
+		const printerId = selectedPrinterId;
+		if (printerId === null) return;
+
 		try {
 			const res = await fetch(apiUrl('/api/tokens'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					ttl: newTokenTtl,
-					comment: newTokenComment || undefined
+					comment: newTokenComment || undefined,
+					printer_id: printerId
 				})
 			});
 
 			generatedToken = await res.json();
 			generatedTokenUrl = publicUrl(`/view?token=${generatedToken.token}`);
-			newTokenComment = ''; // Reset comment after generation
+			newTokenComment = '';
 			await loadData();
 		} catch (e) {
 			console.error('Generate error:', e);
@@ -143,19 +196,17 @@
 	async function copyLink(token: string) {
 		const url = publicUrl(`/view?token=${token}`);
 
-		// Try modern clipboard API first
 		if (navigator.clipboard && window.isSecureContext) {
-			navigator.clipboard.writeText(url)
+			navigator.clipboard
+				.writeText(url)
 				.then(() => {
 					copied = true;
-					setTimeout(() => copied = false, 2000);
+					setTimeout(() => (copied = false), 2000);
 				})
 				.catch(() => {
-					// Fallback to old method if clipboard API fails
 					fallbackCopy(url);
 				});
 		} else {
-			// Fallback for non-secure contexts or older browsers
 			fallbackCopy(url);
 		}
 	}
@@ -173,7 +224,7 @@
 		try {
 			document.execCommand('copy');
 			copied = true;
-			setTimeout(() => copied = false, 2000);
+			setTimeout(() => (copied = false), 2000);
 		} catch (err) {
 			console.error('Failed to copy:', err);
 		}
@@ -196,17 +247,61 @@
 		return new Date(timestamp).toLocaleString('ru-RU');
 	}
 
+	// Load data when selectedPrinterId changes (reacts to URL changes)
+	$effect(async () => {
+		const printerId = selectedPrinterId;
+		if (printerId !== null && initialized) {
+			console.log('[Admin] $effect: Loading data for printer:', printerId);
+			await loadData();
+		}
+	});
+
+	// Validate TTL reactively
 	$effect(() => {
 		newTokenTtl = validateTtl(newTokenTtl);
 	});
 
-	onMount(async () => {
-		// Загружаем данные сразу (basePath уже есть в $page.data)
-		await loadData();
+	// Reset QR form when printer changes
+	$effect(() => {
+		const printerId = selectedPrinterId;
+		if (printerId !== null) {
+			generatedToken = null;
+			generatedTokenUrl = '';
+			newTokenComment = '';
+			newTokenTtl = 60;
+		}
+	});
 
-		// Обновление статуса каждые 5 секунд
-		const interval = setInterval(loadData, 5000);
-		return () => clearInterval(interval);
+	// Handle initial load without printer in URL
+	$effect(async () => {
+		if (!initialized) {
+			console.log('[Admin] Initial load starting...');
+			await loadPrinters();
+			console.log('[Admin] Initial load completed, printers:', printers.length);
+
+			// If no printer in URL, redirect to default or first printer
+			if (selectedPrinterId === null && printers.length > 0) {
+				const defaultPrinter = printers.find((p) => p.is_default) || printers[0];
+				if (defaultPrinter) {
+					console.log('[Admin] Redirecting to default printer:', defaultPrinter.id);
+					goto(`/admin?printer=${defaultPrinter.id}`, { replaceState: true });
+				}
+			}
+		}
+	});
+
+	// Listen for printers updated event from other components
+	$effect(() => {
+		const handler = () => {
+			console.log('[Admin] Printers updated event received, reloading...');
+			loadPrinters();
+		};
+
+		window.addEventListener('printersUpdated', handler);
+
+		return () => {
+			window.removeEventListener('printersUpdated', handler);
+		};
 	});
 </script>
 
@@ -214,19 +309,28 @@
 	<title>Админ-панель | Klipper Print Share</title>
 </svelte:head>
 
-<div class="min-h-screen bg-surface-50-950 p-6">
-	<div class="max-w-6xl mx-auto">
-		<!-- Header -->
-		<header class="mb-8">
-			<h1 class="text-3xl font-bold text-surface-950-50">Klipper Print Share</h1>
-			<p class="text-surface-500 mt-2">Панель управления временными ссылками</p>
-		</header>
+<div class="p-6">
+	<!-- Debug info -->
+	{#if import.meta.env.DEV}
+		<div class="mb-4 p-2 bg-gray-100 text-xs font-mono">
+			DEBUG: initialized={initialized}, printers={printers.length}, selectedPrinterId={selectedPrinterId}
+		</div>
+	{/if}
 
-		{#if loading}
-			<div class="flex justify-center py-12">
-				<div class="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full"></div>
-			</div>
-		{:else}
+	{#if selectedPrinterId !== null}
+		<div class="max-w-6xl mx-auto">
+			<!-- Header -->
+			<header class="mb-8">
+				{#if printers.length > 0}
+					{#each printers as p}
+						{#if p.id === selectedPrinterId}
+							<h1 class="text-3xl font-bold text-surface-950-50">{p.name}</h1>
+						{/if}
+					{/each}
+				{/if}
+				<p class="text-surface-500 mt-2">Панель управления временными ссылками</p>
+			</header>
+
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<!-- Статус принтера -->
 				<div class="lg:col-span-1">
@@ -238,7 +342,13 @@
 								<div>
 									<span class="text-surface-500 text-sm">Состояние</span>
 									<div class="flex items-center gap-2 mt-1">
-										<span class="w-3 h-3 rounded-full {status.state === 'printing' ? 'bg-green-500 animate-pulse' : status.state === 'paused' ? 'bg-yellow-500' : 'bg-gray-500'}"></span>
+										<span
+											class="w-3 h-3 rounded-full {status.state === 'printing'
+												? 'bg-green-500 animate-pulse'
+												: status.state === 'paused'
+													? 'bg-yellow-500'
+													: 'bg-gray-500'}"
+										></span>
 										<span class="font-medium capitalize">{status.state}</span>
 									</div>
 								</div>
@@ -280,10 +390,6 @@
 						{:else}
 							<p class="text-surface-500">Нет данных</p>
 						{/if}
-
-						<a href={apiUrl('/admin/settings')} class="mt-4 block text-sm text-primary-500 hover:underline">
-							Настройки подключения →
-						</a>
 					</div>
 				</div>
 
@@ -295,8 +401,10 @@
 						<div class="flex flex-wrap gap-2 mb-4">
 							{#each ttlOptions as opt}
 								<button
-									class="px-4 py-2 rounded-lg border transition-colors {newTokenTtl === opt.value ? 'bg-primary-500 text-white border-primary-500' : 'border-surface-300-700 hover:border-primary-500'}"
-									onclick={() => newTokenTtl = opt.value}
+									class="px-4 py-2 rounded-lg border transition-colors {newTokenTtl === opt.value
+										? 'bg-primary-500 text-white border-primary-500'
+										: 'border-surface-300-700 hover:border-primary-500'}"
+									onclick={() => (newTokenTtl = opt.value)}
 								>
 									{opt.label}
 								</button>
@@ -352,7 +460,9 @@
 											</code>
 											<button
 												class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-												onclick={() => { if (generatedToken) copyLink(generatedToken.token); }}
+												onclick={() => {
+													if (generatedToken) copyLink(generatedToken.token);
+												}}
 											>
 												{copied ? '✓' : 'Копировать'}
 											</button>
@@ -368,10 +478,7 @@
 									</div>
 									<div class="flex flex-col items-center justify-center">
 										<p class="text-sm text-surface-500 mb-2 text-center">QR-код для сканирования:</p>
-										<QRCode
-											text={generatedTokenUrl}
-											size={200}
-										/>
+										<QRCode text={generatedTokenUrl} size={200} />
 									</div>
 								</div>
 							</div>
@@ -387,7 +494,9 @@
 						{:else}
 							<div class="space-y-3">
 								{#each tokens as t}
-									<div class="flex items-center justify-between p-3 bg-surface-50-950 rounded-lg border border-surface-200-800">
+									<div
+										class="flex items-center justify-between p-3 bg-surface-50-950 rounded-lg border border-surface-200-800"
+									>
 										<div class="flex-1 min-w-0">
 											<code class="text-sm font-mono">{t.token.slice(0, 8)}...</code>
 											{#if t.comment}
@@ -420,6 +529,6 @@
 					</div>
 				</div>
 			</div>
-		{/if}
-	</div>
+		</div>
+	{/if}
 </div>

@@ -2,9 +2,14 @@ import type { ServerLoad } from '@sveltejs/kit';
 import { getAllTokens } from '$lib/server/tokens';
 import { fetchPrinterStatus } from '$lib/server/moonraker';
 
-export const load: ServerLoad = async () => {
+export const load: ServerLoad = async ({ url }) => {
 	const tokens = getAllTokens();
-	const status = await fetchPrinterStatus();
+
+	// Get printer_id from URL params
+	const printerParam = url.searchParams.get('printer');
+	const printerId = printerParam ? parseInt(printerParam, 10) : undefined;
+
+	const status = await fetchPrinterStatus(printerId);
 
 	return {
 		tokens,

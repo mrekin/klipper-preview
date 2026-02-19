@@ -28,7 +28,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 # database
-data/*.db
+data/
 
 # local
 local-*
