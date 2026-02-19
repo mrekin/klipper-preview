@@ -23,10 +23,11 @@
 		current_layer: number;
 		total_layers: number;
 		position: { x: number; y: number; z: number };
+		file_position: number;
 	}
 
 	let status: PrinterStatus | null = $state(null);
-	let gcodeLines: string[] = $state([]);
+	let gcodeLines: Array<{ line: string; filePosition: number }> = $state([]);
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let token: string = $derived($page.url.searchParams.get('token') || '');
@@ -340,6 +341,7 @@
 								currentLayer={status.current_layer}
 								totalLayers={status.total_layers}
 								nozzlePosition={status.position || { x: 0, y: 0, z: 0 }}
+								filePosition={status.file_position || 0}
 							/>
 						{:else}
 							<div class="flex items-center justify-center h-full text-surface-400">

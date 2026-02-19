@@ -26,21 +26,35 @@ export const GET: RequestHandler = async ({ params, url }) => {
 			return json({ error: 'G-code file not found' }, { status: 404 });
 		}
 		
-		// Возвращаем только путь движения (G0/G1 команды) для экономии трафика
+		// Return movement lines (G0/G1 + LAYER markers) with file positions
+		// This allows frontend to determine which part of the current layer has been printed
+		interface GcodeLineEntry {
+			line: string;
+			filePosition: number;
+		}
+
 		const lines = gcode.split('\n');
-		const movementLines: string[] = [];
-		
+		const movementLines: GcodeLineEntry[] = [];
+		let currentBytePosition = 0;
+
 		for (const line of lines) {
 			const trimmed = line.trim();
-			if (trimmed.startsWith('G0') || trimmed.startsWith('G1') || 
+			const lineLength = line.length + 1; // +1 for newline character
+
+			if (trimmed.startsWith('G0') || trimmed.startsWith('G1') ||
 			    trimmed.startsWith(';LAYER:') || trimmed.startsWith('; layer')) {
-				movementLines.push(trimmed);
+				movementLines.push({
+					line: trimmed,
+					filePosition: currentBytePosition
+				});
 			}
+
+			currentBytePosition += lineLength;
 		}
-		
-		return json({ 
+
+		return json({
 			filename,
-			lines: movementLines.slice(0, 50000) // Ограничение для больших файлов
+			lines: movementLines.slice(0, 50000) // Limit for large files
 		});
 	} catch (error) {
 		return json({ error: 'Failed to fetch G-code' }, { status: 500 });

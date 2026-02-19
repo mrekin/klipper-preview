@@ -28,6 +28,7 @@ export interface PrinterStatus {
 	total_layers: number;
 	layer_count: number; // Из метаданных файла
 	position: { x: number; y: number; z: number };
+	file_position: number; // Current position in G-code file (bytes from start)
 }
 
 // Mock-данные для тестирования
@@ -44,29 +45,26 @@ const mockStatus: PrinterStatus = {
 	current_layer: 127,
 	total_layers: 450,
 	layer_count: 450,
-	position: { x: 125.4, y: 87.2, z: 12.7 }
+	position: { x: 125.4, y: 87.2, z: 12.7 },
+	file_position: 450000
 };
 
 // Функция запроса статуса из Moonraker
 export async function fetchPrinterStatus(printerId?: number): Promise<PrinterStatus> {
 	try {
 		const url = getMoonrakerUrl(printerId);
-		console.log('[fetchPrinterStatus] Fetching from Moonraker URL:', url, 'printerId:', printerId);
 
 		// Запрос к Moonraker API для статуса
 		const response = await fetch(
-			`${url}/printer/objects/query?display_status&print_stats&print_stats.info&heater_bed&extruder&toolhead`,
+			`${url}/printer/objects/query?display_status&print_stats&print_stats.info&heater_bed&extruder&toolhead&virtual_sdcard`,
 			{ signal: AbortSignal.timeout(5000) }
 		);
-
-		console.log('[fetchPrinterStatus] Response status:', response.status);
 
 		if (!response.ok) {
 			throw new Error(`Moonraker error: ${response.status}`);
 		}
 
 		const data = await response.json();
-		console.log('[fetchPrinterStatus] Response data:', JSON.stringify(data).substring(0, 500));
 		const result = data.result?.status;
 
 		if (!result) {
@@ -80,8 +78,13 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 		const extruder = result.extruder || {};
 		const heaterBed = result.heater_bed || {};
 		const toolhead = result.toolhead || {};
+		const virtualSdcard = result.virtual_sdcard || {};
 
-		console.log('[fetchPrinterStatus] Parsed status - state:', printStats.state, 'filename:', printStats.filename);
+		// Get file_position from virtual_sdcard
+		const filePosition = virtualSdcard.file_position || 0;
+		if (!virtualSdcard.file_position && printStats.state === 'printing') {
+			console.warn('[fetchPrinterStatus] virtual_sdcard.file_position not available, fallback to 0');
+		}
 
 		// Приоритет: используем точные данные из print_stats.info
 		let currentLayer: number;
@@ -94,7 +97,6 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 			// Современный G-code с layer information
 			currentLayer = printStatsInfo.current_layer;
 			totalLayers = printStatsInfo.total_layer || 0;
-			console.log('[fetchPrinterStatus] Using print_stats.info - layer:', currentLayer, 'total:', totalLayers);
 		} else {
 			// Fallback: старый G-code без layer information
 			let layerCount = 100;
@@ -107,7 +109,6 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 					if (metadataResponse.ok) {
 						const metadataData = await metadataResponse.json();
 						layerCount = metadataData.result?.layer_count || 100;
-						console.log('[fetchPrinterStatus] Using metadata - layer_count:', layerCount);
 					}
 				} catch (e) {
 					console.warn('[fetchPrinterStatus] Failed to fetch file metadata:', e);
@@ -116,7 +117,6 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 
 			currentLayer = Math.floor((displayStatus.progress || 0) * layerCount);
 			totalLayers = layerCount;
-			console.log('[fetchPrinterStatus] Using fallback - calculated layer:', currentLayer, 'total:', totalLayers);
 		}
 
 		// Получаем оценку времени печати из метаданных или используем текущее время как fallback
@@ -143,7 +143,8 @@ export async function fetchPrinterStatus(printerId?: number): Promise<PrinterSta
 				x: toolhead.position?.[0] || 0,
 				y: toolhead.position?.[1] || 0,
 				z: toolhead.position?.[2] || 0
-			}
+			},
+			file_position: filePosition
 		};
 	} catch (error) {
 		console.error('[fetchPrinterStatus] ERROR - returning mock data:', error);
