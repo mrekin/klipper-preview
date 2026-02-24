@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { _ as locales } from 'svelte-i18n';
+
 	interface Printer {
 		id: number;
 		name: string;
@@ -45,7 +47,7 @@
 	// Validate URL
 	$effect(() => {
 		if (printerMoonrakerUrl && !printerMoonrakerUrl.startsWith('http')) {
-			error = 'URL должен начинаться с http:// или https://';
+			error = $locales('printermodal.urlValidationError');
 		} else {
 			error = '';
 		}
@@ -53,7 +55,7 @@
 
 	async function handleSubmit() {
 		if (!printerName.trim() || !printerMoonrakerUrl.trim()) {
-			error = 'Заполните все поля';
+			error = $locales('printermodal.fillAllFields');
 			return;
 		}
 		if (error) return;
@@ -72,10 +74,10 @@
 		<div class="bg-surface-100-900 rounded-xl p-6 max-w-md w-full border border-surface-200-800">
 			<h2 class="text-xl font-bold mb-4">
 				{printer
-					? 'Редактировать принтер'
+					? $locales('printermodal.editPrinter')
 					: printers.length === 0
-						? 'Добавить первый принтер'
-						: 'Добавить принтер'}
+						? $locales('printermodal.addFirstPrinter')
+						: $locales('printermodal.addPrinter')}
 			</h2>
 
 			{#if error}
@@ -87,7 +89,7 @@
 			<form onsubmit={handleSubmit} class="space-y-4">
 				<div>
 					<label for="printer-name" class="block text-sm text-surface-500 mb-2">
-						Имя принтера
+						{$locales('printermodal.printerName')}
 					</label>
 					<input
 						id="printer-name"
@@ -95,14 +97,14 @@
 						bind:value={printerName}
 						disabled={saving}
 						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-						placeholder="Ender 3, Voron 2.4..."
+						placeholder={$locales('printermodal.printerNamePlaceholder')}
 						autofocus
 					/>
 				</div>
 
 				<div>
 					<label for="printer-moonraker" class="block text-sm text-surface-500 mb-2">
-						URL Moonraker
+						{$locales('printermodal.moonrakerUrl')}
 					</label>
 					<input
 						id="printer-moonraker"
@@ -110,7 +112,7 @@
 						bind:value={printerMoonrakerUrl}
 						disabled={saving}
 						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-						placeholder="http://192.168.1.XXX:7125"
+						placeholder={$locales('printermodal.moonrakerUrlPlaceholder')}
 					/>
 				</div>
 
@@ -123,16 +125,16 @@
 						class="w-4 h-4 rounded border-surface-300-700"
 					/>
 					<label for="printer-default" class="text-sm">
-						Использовать по умолчанию
+						{$locales('printermodal.useByDefault')}
 						{#if printers.length === 0}
-							<span class="text-surface-500">(автоматически для первого принтера)</span>
+							<span class="text-surface-500">{$locales('printermodal.autoForFirst')}</span>
 						{/if}
 					</label>
 				</div>
 
 				<div>
 					<label for="thumbnail-sizes" class="block text-sm text-surface-500 mb-2">
-						Размеры превью изображений
+						{$locales('printermodal.thumbnailSizes')}
 					</label>
 					<input
 						id="thumbnail-sizes"
@@ -140,14 +142,13 @@
 						bind:value={printerThumbnailSizes}
 						disabled={saving}
 						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-						placeholder="256x256, 128x128, 64x64"
+						placeholder={$locales('printermodal.thumbnailSizesPlaceholder')}
 					/>
 					<p class="text-xs text-surface-500 mt-2">
-						Размеры thumbnails через запятую (например: 256x256, 128x128, 64x64).
-						Должны совпадать с настройками вашего слайсера (Cura, PrusaSlicer и т.д.).
+						{$locales('printermodal.thumbnailSizesHelp')}
 					</p>
 					<p class="text-xs text-surface-500 mt-1">
-						Если не указано, используются стандартные размеры: 256x256, 128x128, 64x64, 32x32
+						{$locales('printermodal.thumbnailSizesDefault')}
 					</p>
 				</div>
 
@@ -158,7 +159,7 @@
 						onclick={onCancel}
 						disabled={saving}
 					>
-						Отмена
+						{$locales('printermodal.cancel')}
 					</button>
 					<button
 						type="submit"
@@ -170,7 +171,7 @@
 							!!error
 						}
 					>
-						{saving ? 'Сохранение...' : 'Сохранить'}
+						{saving ? $locales('printermodal.saving') : $locales('printermodal.save')}
 					</button>
 				</div>
 			</form>

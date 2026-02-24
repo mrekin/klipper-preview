@@ -10,6 +10,7 @@ declare global {
 		interface PageData {
 			basePath: string;
 			publicUrl: string;
+			language?: string;
 		}
 		// interface PageState {}
 		// interface Platform {}
@@ -19,6 +20,12 @@ declare global {
 		__BASE_PATH__?: string;
 		__PUBLIC_URL__?: string;
 	}
+}
+
+// Allow JSON imports
+declare module '*.json' {
+	const value: Record<string, any>;
+	export default value;
 }
 
 export {};

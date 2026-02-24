@@ -130,6 +130,10 @@ const DEFAULT_MOONRAKER_URL = 'http://192.168.1.100:7125';
 // Настройки публичного URL
 const PUBLIC_URL_KEY = 'public_url';
 
+// Настройки языка
+const LANGUAGE_KEY = 'language';
+const DEFAULT_LANGUAGE = 'en';
+
 // Получение значения настройки
 export function getSetting(key: string): string | null {
 	const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -161,6 +165,21 @@ export function getPublicUrlSetting(): string | null {
 // Сохранение публичного URL
 export function setPublicUrlSetting(url: string): void {
 	setSetting(PUBLIC_URL_KEY, url);
+}
+
+// Получение языка
+export function getLanguageSetting(): string {
+	return getSetting(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
+}
+
+// Сохранение языка
+export function setLanguageSetting(lang: string): void {
+	// Валидация языка
+	const validLanguages = ['en', 'ru'];
+	if (!validLanguages.includes(lang)) {
+		throw new Error(`Invalid language: ${lang}`);
+	}
+	setSetting(LANGUAGE_KEY, lang);
 }
 
 export interface Token {

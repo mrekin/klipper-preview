@@ -1,6 +1,6 @@
 {
   "name": "klipper-print-share",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "scripts": {
     "dev": "vite dev",
@@ -28,7 +28,8 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.6.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "svelte-i18n": "^4.0.1"
   },
   "type": "module"
 }

@@ -1,9 +1,12 @@
 import type { LayoutServerLoad } from './$types';
+import { getLanguageSetting } from '$lib/server/tokens';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
-	// Pass base path from X-Base-Path header and public URL to all pages
+	// Pass base path from X-Base-Path header, public URL and language to all pages
+	const language = getLanguageSetting();
 	return {
 		basePath: (locals as any).basePath || '',
-		publicUrl: (locals as any).publicUrl || ''
+		publicUrl: (locals as any).publicUrl || '',
+		language
 	};
 };

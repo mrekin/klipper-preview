@@ -2,6 +2,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import QRCode from '$lib/components/QRCode.svelte';
+	import { _ as locales } from 'svelte-i18n';
+	import { formatTimeRemaining, formatDate as formatDateString, getTTLLabel } from '$lib/i18n/formatters';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -97,27 +99,17 @@
 			: null
 	);
 
-	// TTL options
-	const ttlOptions = [
-		{ value: 30, label: '30 мин' },
-		{ value: 60, label: '1 час' },
-		{ value: 90, label: '1.5 часа' },
-		{ value: 120, label: '2 часа' },
-		{ value: 180, label: '3 часа' },
-		{ value: 240, label: '4 часа' },
-		{ value: 360, label: '6 часов' },
-		{ value: 480, label: '8 часов' },
-		{ value: 720, label: '12 часов' },
-		{ value: 1440, label: '24 часа' }
-	];
+	// TTL options - will be dynamically generated based on locale
+	const ttlOptionValues = [30, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
+	let ttlOptions = $derived(ttlOptionValues.map(value => ({ value, label: getTTLLabel(value) })));
 
 	function validateTtl(value: number): number {
 		if (value < 1) {
-			validationMessage = 'Минимум: 1 минута';
+			validationMessage = $locales('admin.validationMin');
 			return 1;
 		}
 		if (value > 43200) {
-			validationMessage = 'Максимум: 43200 минут (30 дней)';
+			validationMessage = $locales('admin.validationMax');
 			return 43200;
 		}
 		validationMessage = '';
@@ -212,7 +204,7 @@
 	}
 
 	function fallbackCopy(text: string) {
-		const textarea = document.createElement('textarea');
+		const textarea = document.createElemen$locales('textarea');
 		textarea.value = text;
 		textarea.style.position = 'fixed';
 		textarea.style.left = '-999999px';
@@ -233,18 +225,11 @@
 	}
 
 	function formatTime(expiresAt: number): string {
-		const remaining = expiresAt - Date.now();
-		if (remaining <= 0) return 'Истёк';
-
-		const hours = Math.floor(remaining / (1000 * 60 * 60));
-		const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-
-		if (hours > 0) return `${hours}ч ${minutes}мин`;
-		return `${minutes}мин`;
+		return formatTimeRemaining(expiresAt);
 	}
 
 	function formatDate(timestamp: number): string {
-		return new Date(timestamp).toLocaleString('ru-RU');
+		return formatDateString(timestamp);
 	}
 
 	// Load data when selectedPrinterId changes (reacts to URL changes)
@@ -306,7 +291,7 @@
 </script>
 
 <svelte:head>
-	<title>Админ-панель | Klipper Print Share</title>
+	<title>{$locales('admin.title')} | {$locales('app.name')}</title>
 </svelte:head>
 
 <div class="p-6">
@@ -328,19 +313,19 @@
 						{/if}
 					{/each}
 				{/if}
-				<p class="text-surface-500 mt-2">Панель управления временными ссылками</p>
+				<p class="text-surface-500 mt-2">{$locales('admin.subtitle')}</p>
 			</header>
 
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<!-- Статус принтера -->
 				<div class="lg:col-span-1">
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">Статус принтера</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('admin.printerStatus')}</h2>
 
 						{#if status}
 							<div class="space-y-4">
 								<div>
-									<span class="text-surface-500 text-sm">Состояние</span>
+									<span class="text-surface-500 text-sm">{$locales('admin.state')}</span>
 									<div class="flex items-center gap-2 mt-1">
 										<span
 											class="w-3 h-3 rounded-full {status.state === 'printing'
@@ -355,13 +340,13 @@
 
 								{#if status.filename}
 									<div>
-										<span class="text-surface-500 text-sm">Файл</span>
+										<span class="text-surface-500 text-sm">{$locales('admin.file')}</span>
 										<p class="font-mono text-sm truncate mt-1">{status.filename}</p>
 									</div>
 								{/if}
 
 								<div>
-									<span class="text-surface-500 text-sm">Прогресс</span>
+									<span class="text-surface-500 text-sm">{$locales('admin.progress')}</span>
 									<div class="mt-1">
 										<div class="h-2 bg-surface-200-800 rounded-full overflow-hidden">
 											<div class="h-full bg-primary-500 transition-all" style="width: {status.progress}%"></div>
@@ -372,14 +357,14 @@
 
 								<div class="grid grid-cols-2 gap-4">
 									<div>
-										<span class="text-surface-500 text-sm">Сопло</span>
+										<span class="text-surface-500 text-sm">{$locales('admin.nozzle')}</span>
 										<p class="font-mono">
 											<span class="text-orange-500">{status.extruder_temp}</span>
 											<span class="text-surface-500">/ {status.extruder_target}°C</span>
 										</p>
 									</div>
 									<div>
-										<span class="text-surface-500 text-sm">Стол</span>
+										<span class="text-surface-500 text-sm">{$locales('admin.bed')}</span>
 										<p class="font-mono">
 											<span class="text-blue-500">{status.bed_temp}</span>
 											<span class="text-surface-500">/ {status.bed_target}°C</span>
@@ -388,7 +373,7 @@
 								</div>
 							</div>
 						{:else}
-							<p class="text-surface-500">Нет данных</p>
+							<p class="text-surface-500">{$locales('admin.noData')}</p>
 						{/if}
 					</div>
 				</div>
@@ -396,7 +381,7 @@
 				<!-- Генерация ссылки -->
 				<div class="lg:col-span-2">
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">Создать временную ссылку</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('admin.createLink')}</h2>
 
 						<div class="flex flex-wrap gap-2 mb-4">
 							{#each ttlOptions as opt}
@@ -414,14 +399,14 @@
 						<div class="space-y-4 mb-6">
 							<div>
 								<label for="comment-input" class="block text-sm text-surface-500 mb-2">
-									Комментарий (опционально)
+									{$locales('admin.commentOptional')}
 								</label>
 								<input
 									id="comment-input"
 									type="text"
 									bind:value={newTokenComment}
 									class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950"
-									placeholder="Например: Заказ Иванова - бенчерг"
+									placeholder={$locales('admin.commentPlaceholder')}
 								/>
 							</div>
 
@@ -433,13 +418,13 @@
 									max="43200"
 									bind:value={newTokenTtl}
 									class="flex-1 px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950"
-									placeholder="Произвольное время (мин)"
+									placeholder={$locales('admin.customTime')}
 								/>
 								<button
 									class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
 									onclick={generateToken}
 								>
-									Создать ссылку
+									{$locales('admin.createLinkBtn')}
 								</button>
 							</div>
 							{#if validationMessage}
@@ -451,7 +436,7 @@
 
 						{#if generatedToken}
 							<div class="bg-surface-50-950 rounded-lg p-6 border border-primary-500">
-								<p class="text-sm text-surface-500 mb-4">Ссылка создана:</p>
+								<p class="text-sm text-surface-500 mb-4">{$locales('admin.linkCreated')}</p>
 								<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 									<div>
 										<div class="flex items-center gap-2 mb-2">
@@ -464,20 +449,20 @@
 													if (generatedToken) copyLink(generatedToken.token);
 												}}
 											>
-												{copied ? '✓' : 'Копировать'}
+												{copied ? $locales('common.copied') : $locales('admin.copy')}
 											</button>
 										</div>
 										{#if generatedToken.comment}
 											<p class="text-sm text-surface-600 mt-2">
-												<strong>Комментарий:</strong> {generatedToken.comment}
+												<strong>{$locales('admin.comment')}:</strong> {generatedToken.comment}
 											</p>
 										{/if}
 										<p class="text-sm text-surface-500 mt-2">
-											Действует до: {formatDate(generatedToken.expires_at)}
+											{$locales('admin.validUntil')} {formatDate(generatedToken.expires_at)}
 										</p>
 									</div>
 									<div class="flex flex-col items-center justify-center">
-										<p class="text-sm text-surface-500 mb-2 text-center">QR-код для сканирования:</p>
+										<p class="text-sm text-surface-500 mb-2 text-center">{$locales('admin.qrCodeScan')}</p>
 										<QRCode text={generatedTokenUrl} size={200} />
 									</div>
 								</div>
@@ -487,10 +472,10 @@
 
 					<!-- Список активных ссылок -->
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mt-6">
-						<h2 class="text-lg font-semibold mb-4">Активные ссылки ({tokens.length})</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('admin.activeLinks')} ({tokens.length})</h2>
 
 						{#if tokens.length === 0}
-							<p class="text-surface-500 text-center py-8">Нет активных ссылок</p>
+							<p class="text-surface-500 text-center py-8">{$locales('admin.noActiveLinks')}</p>
 						{:else}
 							<div class="space-y-3">
 								{#each tokens as t}
@@ -505,7 +490,7 @@
 												</div>
 											{/if}
 											<div class="text-sm text-surface-500 mt-1">
-												Осталось: {formatTime(t.expires_at)}
+												{$locales('admin.remaining')}: {formatTime(t.expires_at)}
 											</div>
 										</div>
 										<div class="flex gap-2">
@@ -513,13 +498,13 @@
 												class="px-3 py-1 text-sm bg-primary-500/10 text-primary-500 rounded hover:bg-primary-500/20 transition-colors"
 												onclick={() => copyLink(t.token)}
 											>
-												Копировать
+												{$locales('admin.copy')}
 											</button>
 											<button
 												class="px-3 py-1 text-sm bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
 												onclick={() => revokeToken(t.token)}
 											>
-												Отозвать
+												{$locales('admin.revoke')}
 											</button>
 										</div>
 									</div>

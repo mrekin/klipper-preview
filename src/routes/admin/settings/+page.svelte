@@ -2,6 +2,8 @@
 	import { page } from '$app/stores';
 	import { getBasePathUrl, getBasePath, setPublicUrl } from '$lib/config';
 	import PrinterModal from '$lib/components/PrinterModal.svelte';
+	import { _ as locales } from 'svelte-i18n';
+	import { locale } from 'svelte-i18n';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -23,6 +25,7 @@
 
 	let moonrakerUrl = $state(data.moonrakerUrl || '');
 	let publicUrl = $state(data.publicUrl || '');
+	let selectedLanguage = $state(data.language || 'en');
 	let printers = $state<Printer[]>([]);
 	let showPrinterModal = $state(false);
 	let editingPrinter = $state<Printer | null>(null);
@@ -72,7 +75,7 @@
 
 	function validateUrl(url: string): void {
 		if (url && !isValidPublicUrl(url)) {
-			urlValidationMessage = 'URL должен начинаться с http:// или https://';
+			urlValidationMessage = $locales('settings.urlValidationError');
 		} else {
 			urlValidationMessage = '';
 		}
@@ -201,7 +204,7 @@
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (e: any) {
-			error = e.message || 'Ошибка сохранения принтера';
+			error = e.message || $locales('settings.savePrinterError');
 			console.error('Save printer error:', e);
 		} finally {
 			saving = false;
@@ -246,13 +249,13 @@
 
 			// Dispatch custom event to notify other components
 			if (typeof window !== 'undefined') {
-				window.dispatchEvent(new CustomEvent('printersUpdated'));
+				window.dispatchEvent(new CustomEven$locales('printersUpdated'));
 			}
 
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (e: any) {
-			error = e.message || 'Ошибка удаления принтера';
+			error = e.message || $locales('settings.deletePrinterError');
 			console.error('Delete printer error:', e);
 		} finally {
 			saving = false;
@@ -266,7 +269,7 @@
 
 	async function save() {
 		if (urlValidationMessage) {
-			error = 'Исправьте ошибки перед сохранением';
+			error = $locales('settings.fixErrors');
 			return;
 		}
 
@@ -276,7 +279,7 @@
 			const res = await fetch(apiUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ moonrakerUrl, publicUrl })
+				body: JSON.stringify({ moonrakerUrl, publicUrl, language: selectedLanguage })
 			});
 
 			if (!res.ok) {
@@ -287,10 +290,13 @@
 			// Update window cache immediately for instant availability
 			setPublicUrl(publicUrl);
 
+			// Update locale
+			locale.set(selectedLanguage);
+
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (e: any) {
-			error = e.message || 'Ошибка сохранения настроек';
+			error = e.message || $locales('settings.saveSettingsError');
 			console.error('Save settings error:', e);
 		} finally {
 			saving = false;
@@ -318,16 +324,16 @@
 </script>
 
 <svelte:head>
-	<title>Настройки | Klipper Print Share</title>
+	<title>{$locales('settings.title')} | {$locales('app.name')}</title>
 </svelte:head>
 
 <div class="p-6">
 	<div class="max-w-4xl mx-auto">
 		<a href="/admin" class="text-primary-500 hover:underline mb-6 inline-block">
-			← Назад к панели
+			{$locales('settings.backToPanel')}
 		</a>
 
-		<h1 class="text-2xl font-bold mb-6">Настройки</h1>
+		<h1 class="text-2xl font-bold mb-6">{$locales('settings.title')}</h1>
 
 		{#if error}
 			<div class="bg-red-500/10 text-red-500 px-4 py-3 rounded-lg mb-6">
@@ -337,24 +343,24 @@
 
 		{#if saved}
 			<div class="bg-green-500/10 text-green-500 px-4 py-3 rounded-lg mb-6">
-				✓ Настройки сохранены!
+				✓ {$locales('settings.settingsSaved')}
 			</div>
 		{/if}
 
 		<!-- Printers Section -->
 		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
 			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold">Принтеры</h2>
+				<h2 class="text-lg font-semibold">{$locales('settings.printers')}</h2>
 				<button
 					class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
 					onclick={openCreatePrinterModal}
 				>
-					+ Добавить принтер
+					{$locales('settings.addPrinter')}
 				</button>
 			</div>
 
 			{#if printers.length === 0}
-				<p class="text-surface-500 text-center py-8">Нет настроенных принтеров</p>
+				<p class="text-surface-500 text-center py-8">{$locales('settings.noPrinters')}</p>
 			{:else}
 				<div class="space-y-3">
 					{#each printers as printer}
@@ -364,7 +370,7 @@
 									<span class="font-medium">{printer.name}</span>
 									{#if printer.is_default}
 										<span class="text-xs px-2 py-1 bg-primary-500/10 text-primary-500 rounded"
-											>По умолчанию</span
+											>{$locales('settings.byDefault')}</span
 										>
 									{/if}
 								</div>
@@ -380,7 +386,7 @@
 									)} disabled:opacity-50"
 									onclick={() => checkPrinterHealth(printer.id)}
 									disabled={healthStatus[printer.id] === 'checking'}
-									title="Проверить соединение"
+									title={$locales('settings.checkConnection')}
 								>
 									{getHealthStatusIcon(printer.id)}
 								</button>
@@ -388,13 +394,13 @@
 									class="px-3 py-1 text-sm bg-surface-200-800 hover:bg-surface-300-700 rounded transition-colors"
 									onclick={() => openEditPrinterModal(printer)}
 								>
-									Редактировать
+									{$locales('settings.edit')}
 								</button>
 								<button
 									class="px-3 py-1 text-sm bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded transition-colors"
 									onclick={() => openDeleteConfirm(printer)}
 								>
-									Удалить
+									{$locales('settings.delete')}
 								</button>
 							</div>
 						</div>
@@ -405,12 +411,12 @@
 
 		<!-- Public URL Settings -->
 		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
-			<h2 class="text-lg font-semibold mb-4">Публичные ссылки</h2>
+			<h2 class="text-lg font-semibold mb-4">{$locales('settings.publicLinks')}</h2>
 
 			<div class="space-y-4">
 				<div>
 					<label for="public-url" class="block text-sm text-surface-500 mb-2"
-						>Публичный URL</label
+						>{$locales('settings.publicUrl')}</label
 					>
 					<input
 						id="public-url"
@@ -418,16 +424,16 @@
 						bind:value={publicUrl}
 						disabled={loading || saving}
 						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-						placeholder="https://mydomain.ru/klippershare"
+						placeholder={$locales('settings.publicUrlPlaceholder')}
 					/>
 					<p class="text-sm text-surface-500 mt-2">
-						Полный URL, по которому пользователи будут открывать preview страницу
+						{$locales('settings.publicUrlHelp')}
 					</p>
 					<p class="text-sm text-surface-500 mt-1">
-						Если поле пустое - используется текущий адрес админки
+						{$locales('settings.publicUrlEmptyHelp')}
 					</p>
 					<p class="text-xs text-surface-600 mt-2">
-						Примеры: https://mydomain.ru/klippershare, http://192.168.1.100:8080/print
+						{$locales('settings.publicUrlExamples')}
 					</p>
 					{#if urlValidationMessage}
 						<p class="text-sm text-orange-500 mt-2">
@@ -443,7 +449,42 @@
 					onclick={save}
 					disabled={loading || saving || urlValidationMessage !== ''}
 				>
-					{saving ? 'Сохранение...' : 'Сохранить настройки'}
+					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
+				</button>
+			</div>
+		</div>
+
+		<!-- Language Settings -->
+		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
+			<h2 class="text-lg font-semibold mb-4">{$locales('settings.language')}</h2>
+
+			<div class="space-y-4">
+				<div>
+					<label for="language-select" class="block text-sm text-surface-500 mb-2">
+						{$locales('settings.interfaceLanguage')}
+					</label>
+					<select
+						id="language-select"
+						bind:value={selectedLanguage}
+						disabled={loading || saving}
+						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
+					>
+						<option value="en">English</option>
+						<option value="ru">Русский</option>
+					</select>
+					<p class="text-sm text-surface-500 mt-2">
+						{$locales('settings.languageHint')}
+					</p>
+				</div>
+			</div>
+
+			<div class="mt-6 flex justify-end">
+				<button
+					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					onclick={save}
+					disabled={loading || saving}
+				>
+					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
 				</button>
 			</div>
 		</div>
@@ -466,15 +507,15 @@
 {#if showDeleteConfirm && deletingPrinter}
 	<div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
 		<div class="bg-surface-100-900 rounded-xl p-6 max-w-md w-full border border-surface-200-800">
-			<h2 class="text-xl font-bold mb-4">Удалить принтер?</h2>
+			<h2 class="text-xl font-bold mb-4">{$locales('settings.deletePrinter')}</h2>
 
 			<p class="text-surface-600 mb-4">
-				Вы уверены, что хотите удалить принтер <strong>"{deletingPrinter.name}"</strong>?
+				{@html $locales('settings.deletePrinterConfirm', { name: deletingPrinter.name })}
 			</p>
 
 			{#if (deletingPrinter.token_count || 0) > 0}
 				<p class="text-orange-500 mb-4">
-					Это также удалит {deletingPrinter.token_count} связанных токенов.
+					{@html $locales('settings.deleteTokensWarning', { count: deletingPrinter.token_count || 0 })}
 				</p>
 			{/if}
 
@@ -484,14 +525,14 @@
 					onclick={() => (showDeleteConfirm = false)}
 					disabled={saving}
 				>
-					Отмена
+					{$locales('common.cancel')}
 				</button>
 				<button
 					class="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50"
 					onclick={deletePrinter}
 					disabled={saving}
 				>
-					{saving ? 'Удаление...' : 'Удалить'}
+					{saving ? $locales('settings.saving') : $locales('common.delete')}
 				</button>
 			</div>
 		</div>

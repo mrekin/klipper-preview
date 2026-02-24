@@ -47,3 +47,5 @@ server.log
 docs/
 .main.gt
 chrome/
+.vscode/
+about_html/

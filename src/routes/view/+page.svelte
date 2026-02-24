@@ -3,6 +3,8 @@
 	import { browser } from '$app/environment';
 	import { getBasePathUrl, getBasePath } from '$lib/config';
 	import GCodeViewer from '$lib/components/GCodeViewer.svelte';
+	import { _ as locales } from 'svelte-i18n';
+	import { formatDuration, formatETA, formatTimeRemaining } from '$lib/i18n/formatters';
 
 	interface TokenData {
 		token: string;
@@ -65,7 +67,7 @@
 
 	async function loadStatus() {
 		if (!token) {
-			error = 'Токен не указан';
+			error = $locales('errors.tokenNotProvided');
 			loading = false;
 			return;
 		}
@@ -75,9 +77,9 @@
 
 			if (!res.ok) {
 				if (res.status === 403) {
-					error = 'Ссылка недействительна или истёк срок действия';
+					error = $locales('errors.linkInvalid');
 				} else {
-					error = 'Ошибка загрузки данных';
+					error = $locales('errors.loadingError');
 				}
 				return;
 			}
@@ -108,34 +110,7 @@
 		}
 	}
 
-	function formatDuration(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = Math.floor(seconds % 60);
-
-		if (h > 0) {
-			return `${h}ч ${m}мин ${s}сек`;
-		}
-		return `${m}мин ${s}сек`;
-	}
-
-	function formatETA(seconds: number): string {
-		if (seconds <= 0) return '—';
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-
-		if (h > 0) return `~${h}ч ${m}мин`;
-		return `~${m}мин`;
-	}
-
-	function formatTimeRemaining(expiresAt: number): string {
-		const remaining = expiresAt - Date.now();
-		if (remaining <= 0) return 'Истёк';
-		const h = Math.floor(remaining / (1000 * 60 * 60));
-		const m = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-		if (h > 0) return `${h}ч ${m}мин`;
-		return `${m}мин`;
-	}
+	// formatDuration, formatETA, and formatTimeRemaining are now imported from formatters.ts
 
 	function calculatePrintETA(status: PrinterStatus): string {
 		// Рассчитываем на основе прогресса
@@ -166,7 +141,7 @@
 		(async () => {
 			// Проверяем наличие токена
 			if (!token) {
-				error = 'Токен не указан';
+				error = $locales('errors.tokenNotProvided');
 				loading = false;
 				return;
 			}
@@ -191,7 +166,7 @@
 </script>
 
 <svelte:head>
-	<title>Статус печати | Klipper Print Share</title>
+	<title>{$locales('view.title')} | {$locales('app.name')}</title>
 </svelte:head>
 
 <div class="min-h-screen bg-surface-50-950">
@@ -204,7 +179,7 @@
 			<div class="text-center max-w-md p-8">
 				<div class="text-6xl mb-4">🔒</div>
 				<h1 class="text-2xl font-bold mb-2">{error}</h1>
-				<p class="text-surface-500">Свяжитесь с оператором для получения новой ссылки</p>
+				<p class="text-surface-500">{$locales('errors.contactOperator')}</p>
 			</div>
 		</div>
 	{:else if status}
@@ -214,7 +189,7 @@
 				<div class="flex items-center gap-3 mb-2">
 					<span class="w-3 h-3 rounded-full {status.state === 'printing' ? 'bg-green-500 animate-pulse' : status.state === 'paused' ? 'bg-yellow-500' : status.state === 'complete' ? 'bg-blue-500' : 'bg-gray-500'}"></span>
 					<h1 class="text-2xl font-bold capitalize">
-						{status.state === 'printing' ? 'Печатается' : status.state === 'paused' ? 'На паузе' : status.state === 'complete' ? 'Завершено' : status.state}
+						{status.state === 'printing' ? $locales('view.printing') : status.state === 'paused' ? $locales('view.paused') : status.state === 'complete' ? $locales('view.complete') : status.state}
 					</h1>
 				</div>
 				{#if status.filename}
@@ -227,7 +202,7 @@
 				<div class="space-y-4">
 					<!-- Progress -->
 					<div class="bg-surface-100-900 rounded-xl p-5 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">Прогресс</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('view.progress')}</h2>
 
 						<!-- Thumbnail image -->
 						{#if thumbnailVisible && thumbnailUrl}
@@ -246,7 +221,7 @@
 						<!-- Progress bar -->
 						<div class="mb-4">
 							<div class="flex justify-between text-sm mb-2">
-								<span>Выполнено</span>
+								<span>{$locales('view.completed')}</span>
 								<span class="font-mono">{status.progress.toFixed(1)}%</span>
 							</div>
 							<div class="h-4 bg-surface-200-800 rounded-full overflow-hidden">
@@ -259,22 +234,22 @@
 
 						<!-- Layer info -->
 						<div class="flex justify-between text-sm">
-							<span class="text-surface-400">Слой</span>
+							<span class="text-surface-400">{$locales('view.layer')}</span>
 							<span class="font-mono">{status.current_layer} / {status.total_layers || '—'}</span>
 						</div>
 					</div>
 
 					<!-- Time -->
 					<div class="bg-surface-100-900 rounded-xl p-5 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">Время</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('view.time')}</h2>
 
 						<div class="grid grid-cols-2 gap-4">
 							<div>
-								<p class="text-surface-400 text-sm mb-1">Прошло</p>
+								<p class="text-surface-400 text-sm mb-1">{$locales('view.elapsed')}</p>
 								<p class="text-2xl font-mono">{formatDuration(status.print_duration)}</p>
 							</div>
 							<div>
-								<p class="text-surface-400 text-sm mb-1">Осталось</p>
+								<p class="text-surface-400 text-sm mb-1">{$locales('view.remaining')}</p>
 								<p class="text-2xl font-mono">{calculatePrintETA(status)}</p>
 							</div>
 						</div>
@@ -282,7 +257,7 @@
 
 					<!-- Temperatures -->
 					<div class="bg-surface-100-900 rounded-xl p-5 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">Температуры</h2>
+						<h2 class="text-lg font-semibold mb-4">{$locales('view.temperatures')}</h2>
 
 						<div class="grid grid-cols-2 gap-6">
 							<!-- Extruder -->
@@ -291,7 +266,7 @@
 									<div class="w-8 h-8 bg-orange-500/20 rounded-lg flex items-center justify-center">
 										<span class="text-orange-500">🔥</span>
 									</div>
-									<span class="text-sm text-surface-400">Сопло</span>
+									<span class="text-sm text-surface-400">{$locales('view.nozzle')}</span>
 								</div>
 								<p class="text-3xl font-mono">
 									<span class="text-orange-500">{Math.round(status.extruder_temp)}</span>
@@ -311,7 +286,7 @@
 									<div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
 										<span class="text-blue-500">📦</span>
 									</div>
-									<span class="text-sm text-surface-400">Стол</span>
+									<span class="text-sm text-surface-400">{$locales('view.bed')}</span>
 								</div>
 								<p class="text-3xl font-mono">
 									<span class="text-blue-500">{Math.round(status.bed_temp)}</span>
@@ -331,8 +306,8 @@
 				<!-- Right: G-code viewer -->
 				<div class="bg-surface-100-900 rounded-xl border border-surface-200-800 overflow-hidden">
 					<div class="p-4 border-b border-surface-200-800">
-						<h2 class="text-lg font-semibold">Визуализация</h2>
-						<p class="text-sm text-surface-400">Превью G-code</p>
+						<h2 class="text-lg font-semibold">{$locales('view.visualization')}</h2>
+						<p class="text-sm text-surface-400">{$locales('view.gcodePreview')}</p>
 					</div>
 					<div class="h-[400px] lg:h-[500px]">
 						{#if gcodeLines.length > 0}
@@ -347,7 +322,7 @@
 							<div class="flex items-center justify-center h-full text-surface-400">
 								<div class="text-center">
 									<div class="text-4xl mb-2">📐</div>
-									<p>Загрузка G-code...</p>
+									<p>{$locales('view.loadingGcode')}</p>
 								</div>
 							</div>
 						{/if}
@@ -358,9 +333,9 @@
 			<!-- Footer -->
 			<footer class="mt-8 text-center text-sm text-surface-500">
 				{#if tokenData}
-					<p>Действует {formatTimeRemaining(tokenData.expires_at)}</p>
+					<p>{$locales('settings.publicUrl')} {formatTimeRemaining(tokenData.expires_at)}</p>
 				{:else}
-					<p>Ссылка недействительна</p>
+					<p>{$locales('view.linkNotValid')}</p>
 				{/if}
 			</footer>
 		</div>

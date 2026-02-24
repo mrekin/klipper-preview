@@ -4,14 +4,17 @@ import {
 	getMoonrakerUrlSetting,
 	setMoonrakerUrlSetting,
 	getPublicUrlSetting,
-	setPublicUrlSetting
+	setPublicUrlSetting,
+	getLanguageSetting,
+	setLanguageSetting
 } from '$lib/server/tokens';
 
 // Получить настройки
 export const GET: RequestHandler = async () => {
 	const moonrakerUrl = getMoonrakerUrlSetting();
 	const publicUrl = getPublicUrlSetting();
-	return json({ moonrakerUrl, publicUrl });
+	const language = getLanguageSetting();
+	return json({ moonrakerUrl, publicUrl, language });
 };
 
 // Валидация формата публичного URL
@@ -28,7 +31,7 @@ function isValidPublicUrl(url: string): boolean {
 // Сохранить настройки
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
-	const { moonrakerUrl, publicUrl } = body;
+	const { moonrakerUrl, publicUrl, language } = body;
 
 	if (moonrakerUrl && typeof moonrakerUrl === 'string') {
 		setMoonrakerUrlSetting(moonrakerUrl);
@@ -43,5 +46,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	return json({ success: true, moonrakerUrl, publicUrl });
+	if (language && typeof language === 'string') {
+		try {
+			setLanguageSetting(language);
+		} catch (e: any) {
+			return json({ error: e.message }, { status: 400 });
+		}
+	}
+
+	return json({ success: true, moonrakerUrl, publicUrl, language });
 };
