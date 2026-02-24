@@ -2,8 +2,12 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import QRCode from '$lib/components/QRCode.svelte';
-	import { _ as locales } from 'svelte-i18n';
-	import { formatTimeRemaining, formatDate as formatDateString, getTTLLabel } from '$lib/i18n/formatters';
+	import { _, locale } from 'svelte-i18n';
+	import {
+		formatDate as formatDateString,
+		formatTimeRemaining,
+		getTTLLabel
+	} from '$lib/i18n/formatters';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -55,6 +59,9 @@
 	let validationMessage = $state('');
 	let initialized = $state(false);
 
+	// Current locale for formatters
+	let currentLocale = $derived($locale || 'en');
+
 	// Get base path from layout data
 	let basePath = $derived($page.data.basePath || '');
 
@@ -101,15 +108,15 @@
 
 	// TTL options - will be dynamically generated based on locale
 	const ttlOptionValues = [30, 60, 90, 120, 180, 240, 360, 480, 720, 1440];
-	let ttlOptions = $derived(ttlOptionValues.map(value => ({ value, label: getTTLLabel(value) })));
+	let ttlOptions = $derived.by(() => ttlOptionValues.map(value => ({ value, label: getTTLLabel(value, currentLocale) })));
 
 	function validateTtl(value: number): number {
 		if (value < 1) {
-			validationMessage = $locales('admin.validationMin');
+			validationMessage = $_('admin.validationMin');
 			return 1;
 		}
 		if (value > 43200) {
-			validationMessage = $locales('admin.validationMax');
+			validationMessage = $_('admin.validationMax');
 			return 43200;
 		}
 		validationMessage = '';
@@ -204,7 +211,7 @@
 	}
 
 	function fallbackCopy(text: string) {
-		const textarea = document.createElemen$locales('textarea');
+		const textarea = document.createElement('textarea');
 		textarea.value = text;
 		textarea.style.position = 'fixed';
 		textarea.style.left = '-999999px';
@@ -222,10 +229,6 @@
 		}
 
 		document.body.removeChild(textarea);
-	}
-
-	function formatTime(expiresAt: number): string {
-		return formatTimeRemaining(expiresAt);
 	}
 
 	function formatDate(timestamp: number): string {
@@ -291,7 +294,7 @@
 </script>
 
 <svelte:head>
-	<title>{$locales('admin.title')} | {$locales('app.name')}</title>
+	<title>{$_('admin.title')} | {$_('app.name')}</title>
 </svelte:head>
 
 <div class="p-6">
@@ -313,19 +316,19 @@
 						{/if}
 					{/each}
 				{/if}
-				<p class="text-surface-500 mt-2">{$locales('admin.subtitle')}</p>
+				<p class="text-surface-500 mt-2">{$_('admin.subtitle')}</p>
 			</header>
 
 			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<!-- Статус принтера -->
 				<div class="lg:col-span-1">
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">{$locales('admin.printerStatus')}</h2>
+						<h2 class="text-lg font-semibold mb-4">{$_('admin.printerStatus')}</h2>
 
 						{#if status}
 							<div class="space-y-4">
 								<div>
-									<span class="text-surface-500 text-sm">{$locales('admin.state')}</span>
+									<span class="text-surface-500 text-sm">{$_('admin.state')}</span>
 									<div class="flex items-center gap-2 mt-1">
 										<span
 											class="w-3 h-3 rounded-full {status.state === 'printing'
@@ -340,13 +343,13 @@
 
 								{#if status.filename}
 									<div>
-										<span class="text-surface-500 text-sm">{$locales('admin.file')}</span>
+										<span class="text-surface-500 text-sm">{$_('admin.file')}</span>
 										<p class="font-mono text-sm truncate mt-1">{status.filename}</p>
 									</div>
 								{/if}
 
 								<div>
-									<span class="text-surface-500 text-sm">{$locales('admin.progress')}</span>
+									<span class="text-surface-500 text-sm">{$_('admin.progress')}</span>
 									<div class="mt-1">
 										<div class="h-2 bg-surface-200-800 rounded-full overflow-hidden">
 											<div class="h-full bg-primary-500 transition-all" style="width: {status.progress}%"></div>
@@ -357,14 +360,14 @@
 
 								<div class="grid grid-cols-2 gap-4">
 									<div>
-										<span class="text-surface-500 text-sm">{$locales('admin.nozzle')}</span>
+										<span class="text-surface-500 text-sm">{$_('admin.nozzle')}</span>
 										<p class="font-mono">
 											<span class="text-orange-500">{status.extruder_temp}</span>
 											<span class="text-surface-500">/ {status.extruder_target}°C</span>
 										</p>
 									</div>
 									<div>
-										<span class="text-surface-500 text-sm">{$locales('admin.bed')}</span>
+										<span class="text-surface-500 text-sm">{$_('admin.bed')}</span>
 										<p class="font-mono">
 											<span class="text-blue-500">{status.bed_temp}</span>
 											<span class="text-surface-500">/ {status.bed_target}°C</span>
@@ -373,7 +376,7 @@
 								</div>
 							</div>
 						{:else}
-							<p class="text-surface-500">{$locales('admin.noData')}</p>
+							<p class="text-surface-500">{$_('admin.noData')}</p>
 						{/if}
 					</div>
 				</div>
@@ -381,7 +384,7 @@
 				<!-- Генерация ссылки -->
 				<div class="lg:col-span-2">
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800">
-						<h2 class="text-lg font-semibold mb-4">{$locales('admin.createLink')}</h2>
+						<h2 class="text-lg font-semibold mb-4">{$_('admin.createLink')}</h2>
 
 						<div class="flex flex-wrap gap-2 mb-4">
 							{#each ttlOptions as opt}
@@ -399,14 +402,14 @@
 						<div class="space-y-4 mb-6">
 							<div>
 								<label for="comment-input" class="block text-sm text-surface-500 mb-2">
-									{$locales('admin.commentOptional')}
+									{$_('admin.commentOptional')}
 								</label>
 								<input
 									id="comment-input"
 									type="text"
 									bind:value={newTokenComment}
 									class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950"
-									placeholder={$locales('admin.commentPlaceholder')}
+									placeholder={$_('admin.commentPlaceholder')}
 								/>
 							</div>
 
@@ -418,13 +421,13 @@
 									max="43200"
 									bind:value={newTokenTtl}
 									class="flex-1 px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950"
-									placeholder={$locales('admin.customTime')}
+									placeholder={$_('admin.customTime')}
 								/>
 								<button
 									class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
 									onclick={generateToken}
 								>
-									{$locales('admin.createLinkBtn')}
+									{$_('admin.createLinkBtn')}
 								</button>
 							</div>
 							{#if validationMessage}
@@ -436,7 +439,7 @@
 
 						{#if generatedToken}
 							<div class="bg-surface-50-950 rounded-lg p-6 border border-primary-500">
-								<p class="text-sm text-surface-500 mb-4">{$locales('admin.linkCreated')}</p>
+								<p class="text-sm text-surface-500 mb-4">{$_('admin.linkCreated')}</p>
 								<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 									<div>
 										<div class="flex items-center gap-2 mb-2">
@@ -449,20 +452,20 @@
 													if (generatedToken) copyLink(generatedToken.token);
 												}}
 											>
-												{copied ? $locales('common.copied') : $locales('admin.copy')}
+												{copied ? $_('common.copied') : $_('admin.copy')}
 											</button>
 										</div>
 										{#if generatedToken.comment}
 											<p class="text-sm text-surface-600 mt-2">
-												<strong>{$locales('admin.comment')}:</strong> {generatedToken.comment}
+												<strong>{$_('admin.comment')}:</strong> {generatedToken.comment}
 											</p>
 										{/if}
 										<p class="text-sm text-surface-500 mt-2">
-											{$locales('admin.validUntil')} {formatDate(generatedToken.expires_at)}
+											{$_('admin.validUntil')} {formatDate(generatedToken.expires_at)}
 										</p>
 									</div>
 									<div class="flex flex-col items-center justify-center">
-										<p class="text-sm text-surface-500 mb-2 text-center">{$locales('admin.qrCodeScan')}</p>
+										<p class="text-sm text-surface-500 mb-2 text-center">{$_('admin.qrCodeScan')}</p>
 										<QRCode text={generatedTokenUrl} size={200} />
 									</div>
 								</div>
@@ -472,10 +475,10 @@
 
 					<!-- Список активных ссылок -->
 					<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mt-6">
-						<h2 class="text-lg font-semibold mb-4">{$locales('admin.activeLinks')} ({tokens.length})</h2>
+						<h2 class="text-lg font-semibold mb-4">{$_('admin.activeLinks')} ({tokens.length})</h2>
 
 						{#if tokens.length === 0}
-							<p class="text-surface-500 text-center py-8">{$locales('admin.noActiveLinks')}</p>
+							<p class="text-surface-500 text-center py-8">{$_('admin.noActiveLinks')}</p>
 						{:else}
 							<div class="space-y-3">
 								{#each tokens as t}
@@ -490,7 +493,7 @@
 												</div>
 											{/if}
 											<div class="text-sm text-surface-500 mt-1">
-												{$locales('admin.remaining')}: {formatTime(t.expires_at)}
+												{$_('admin.remaining')}: {formatTimeRemaining(t.expires_at, currentLocale)}
 											</div>
 										</div>
 										<div class="flex gap-2">
@@ -498,13 +501,13 @@
 												class="px-3 py-1 text-sm bg-primary-500/10 text-primary-500 rounded hover:bg-primary-500/20 transition-colors"
 												onclick={() => copyLink(t.token)}
 											>
-												{$locales('admin.copy')}
+												{$_('admin.copy')}
 											</button>
 											<button
 												class="px-3 py-1 text-sm bg-red-500/10 text-red-500 rounded hover:bg-red-500/20 transition-colors"
 												onclick={() => revokeToken(t.token)}
 											>
-												{$locales('admin.revoke')}
+												{$_('admin.revoke')}
 											</button>
 										</div>
 									</div>

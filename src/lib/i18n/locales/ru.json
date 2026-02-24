@@ -125,5 +125,19 @@
 		"hours": "час",
 		"hoursPlural": "часа",
 		"custom": "Произвольное время (мин)"
+	},
+	"formatters": {
+		"h": "ч",
+		"m": "мин",
+		"s": "с",
+		"etaPrefix": "Осталось",
+		"expired": "Истёк",
+		"ttl": {
+			"minutes": "мин",
+			"hour": "час",
+			"hoursPlural": "часа",
+			"hoursMany": "часов",
+			"custom": "Произвольное время (мин)"
+		}
 	}
 }

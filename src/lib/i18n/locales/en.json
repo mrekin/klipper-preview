@@ -125,5 +125,19 @@
 		"hours": "hour",
 		"hoursPlural": "hours",
 		"custom": "Custom time (min)"
+	},
+	"formatters": {
+		"h": "h",
+		"m": "m",
+		"s": "s",
+		"etaPrefix": "ETA",
+		"expired": "Expired",
+		"ttl": {
+			"minutes": "min",
+			"hour": "hour",
+			"hoursPlural": "hours",
+			"hoursMany": "hours",
+			"custom": "Custom time (min)"
+		}
 	}
 }
