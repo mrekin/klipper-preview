@@ -3,6 +3,21 @@
 		"name": "Klipper Print Share",
 		"redirecting": "Redirecting..."
 	},
+	"layout": {
+		"welcome": "Welcome to Klipper Print Share!",
+		"addFirstPrinter": "Add your first printer to get started",
+		"addFirstPrinterBtn": "+ Add first printer",
+		"title": "Klipper Print Share",
+		"subtitle": "Printer management",
+		"printers": "Printers",
+		"addPrinter": "+ Add printer",
+		"defaultPrinter": "Default printer",
+		"settings": "Settings",
+		"savePrinterError": "Error saving printer"
+	},
+	"viewer": {
+		"layer": "Layer"
+	},
 	"admin": {
 		"title": "Admin Panel",
 		"subtitle": "Temporary links management panel",

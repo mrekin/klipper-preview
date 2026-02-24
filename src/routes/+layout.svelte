@@ -16,10 +16,8 @@
 	$effect(async () => {
 		if (typeof window !== 'undefined' && !i18nReady) {
 			try {
-				console.log('[LAYOUT] Initializing i18n with locale:', data.language);
 				await setupI18n(data.language);
 				i18nReady = true;
-				console.log('[LAYOUT] i18n initialized successfully');
 			} catch (error) {
 				console.error('[LAYOUT] Failed to initialize i18n:', error);
 				i18nReady = true; // Still show content even if i18n fails

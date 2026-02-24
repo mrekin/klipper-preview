@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import type { Snippet } from 'svelte';
 	import PrinterModal from '$lib/components/PrinterModal.svelte';
+	import { _ as locales } from 'svelte-i18n';
 
 	interface Printer {
 		id: number;
@@ -26,9 +27,9 @@
 	let error = $state('');
 
 	// Get printer_id from URL - used for highlighting active printer
-	let urlPrinterId = $derived(
-		$page.url.searchParams.get('printer')
-			? parseInt($page.url.searchParams.get('printer')!)
+	let urlPrinterId = $derived.by(() =>
+		page.url.searchParams.get('printer')
+			? parseInt(page.url.searchParams.get('printer')!)
 			: null
 	);
 
@@ -47,7 +48,7 @@
 
 	// Select printer and navigate to it
 	function selectPrinter(printerId: number) {
-		goto(`/admin?printer=${printerId}`, { keepFocus: true, noscroll: true });
+		goto(`/admin?printer=${printerId}`, { keepFocus: true, noScroll: true });
 	}
 
 	// Open modal for creating printer
@@ -91,7 +92,7 @@
 				goto(`/admin?printer=${newPrinter.id}`, { replaceState: true });
 			}
 		} catch (e: any) {
-			error = e.message || 'Ошибка сохранения принтера';
+			error = e.message || $locales('layout.savePrinterError');
 			console.error('Save printer error:', e);
 		} finally {
 			saving = false;
@@ -102,7 +103,7 @@
 </script>
 
 <svelte:head>
-	<title>Klipper Print Share - Admin</title>
+	<title>{$locales('layout.title')} - Admin</title>
 </svelte:head>
 
 <div class="min-h-screen bg-surface-50-950 flex">
@@ -114,16 +115,16 @@
 		<div class="flex items-center justify-center w-full">
 			<div class="text-center max-w-md">
 				<h2 class="text-2xl font-bold text-surface-950-50 mb-2">
-					Добро пожаловать в Klipper Print Share!
+					{$locales('layout.welcome')}
 				</h2>
 				<p class="text-surface-500 mb-6">
-					Добавьте ваш первый принтер для начала работы
+					{$locales('layout.addFirstPrinter')}
 				</p>
 				<button
 					class="px-6 py-3 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
 					onclick={openCreatePrinterModal}
 				>
-					+ Добавить первый принтер
+					{$locales('layout.addFirstPrinterBtn')}
 				</button>
 			</div>
 		</div>
@@ -133,12 +134,12 @@
 			class="w-64 bg-surface-100-900 border-r border-surface-200-800 p-4 flex-shrink-0 overflow-y-auto"
 		>
 			<div class="mb-6">
-				<h1 class="text-xl font-bold text-surface-950-50">Klipper Print Share</h1>
-				<p class="text-sm text-surface-500 mt-1">Управление принтерами</p>
+				<h1 class="text-xl font-bold text-surface-950-50">{$locales('layout.title')}</h1>
+				<p class="text-sm text-surface-500 mt-1">{$locales('layout.subtitle')}</p>
 			</div>
 
 			<nav class="space-y-2">
-				<p class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">Принтеры</p>
+				<p class="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-2">{$locales('layout.printers')}</p>
 				{#each printers as printer}
 					<button
 						class="w-full text-left px-3 py-2 rounded-lg transition-colors {urlPrinterId === printer.id
@@ -149,7 +150,7 @@
 						<div class="flex items-center justify-between">
 							<span class="truncate">{printer.name}</span>
 							{#if printer.is_default}
-								<span class="text-xs opacity-75" title="Принтер по умолчанию">★</span>
+								<span class="text-xs opacity-75" title={$locales('layout.defaultPrinter')}>★</span>
 							{/if}
 						</div>
 					</button>
@@ -158,7 +159,7 @@
 					class="w-full text-left px-3 py-2 rounded-lg border border-dashed border-surface-300-700 hover:border-primary-500 hover:bg-primary-500/5 transition-colors text-surface-500 hover:text-primary-500"
 					onclick={openCreatePrinterModal}
 				>
-					+ Добавить принтер
+					{$locales('layout.addPrinter')}
 				</button>
 			</nav>
 
@@ -181,7 +182,7 @@
 							d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
 						></path>
 					</svg>
-					<span>Настройки</span>
+					<span>{$locales('layout.settings')}</span>
 				</a>
 			</div>
 		</aside>

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { getBasePathUrl, getBasePath, setPublicUrl } from '$lib/config';
+	import { page } from '$app/state';
+	import { getBasePath, setPublicUrl } from '$lib/config';
 	import PrinterModal from '$lib/components/PrinterModal.svelte';
 	import { _ as locales } from 'svelte-i18n';
 	import { locale } from 'svelte-i18n';
@@ -42,7 +42,7 @@
 	let healthStatus = $state<Record<number, HealthCheckStatus>>({});
 
 	// Get base path from layout data
-	let basePath = $derived($page.data.basePath || '');
+	let basePath = $derived.by(() => page.data.basePath || '');
 
 	// Cache publicUrl in window for faster access
 	$effect(() => {
@@ -54,12 +54,6 @@
 	// Helper to build API URLs with base path
 	function apiUrl(path: string): string {
 		return basePath + path;
-	}
-
-	// Helper function to update state safely
-	function updateState(newMoonrakerUrl: string, newPublicUrl: string) {
-		moonrakerUrl = newMoonrakerUrl;
-		publicUrl = newPublicUrl;
 	}
 
 	// Валидация публичного URL
@@ -249,7 +243,7 @@
 
 			// Dispatch custom event to notify other components
 			if (typeof window !== 'undefined') {
-				window.dispatchEvent(new CustomEven$locales('printersUpdated'));
+				window.dispatchEvent(new CustomEvent('printersUpdated'));
 			}
 
 			saved = true;
@@ -309,7 +303,6 @@
 	// Listen for printers updated event from other components
 	$effect(() => {
 		const handler = () => {
-			console.log('[Settings] Printers updated event received, reloading...');
 			loadPrinters();
 		};
 

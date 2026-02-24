@@ -22,8 +22,6 @@
 			return;
 		}
 
-		console.log('[QRCode] Generating for:', text);
-
 		// Сбрасываем состояние при изменении text
 		dataUrl = '';
 		loading = true;
@@ -40,7 +38,6 @@
 			.then((url) => {
 				dataUrl = url;
 				loading = false;
-				console.log('[QRCode] Success, length:', url.length);
 			})
 			.catch((e) => {
 				error = 'Failed to generate QR';

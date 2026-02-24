@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { browser } from '$app/environment';
 	import GCodeViewer from '$lib/components/GCodeViewer.svelte';
 	import { _, locale } from 'svelte-i18n';
@@ -35,7 +35,7 @@
 	let gcodeLines: Array<{ line: string; filePosition: number }> = $state([]);
 	let loading = $state(true);
 	let error: string | null = $state(null);
-	let token: string = $derived($page.url.searchParams.get('token') || '');
+	let token: string = $derived.by(() => page.url.searchParams.get('token') || '');
 	let tokenData: TokenData | null = $state(null);
 	let loadedFilename: string | null = $state(null);
 	let thumbnailVisible = $state(true);
@@ -49,7 +49,7 @@
 	let currentFilename = $derived.by(() => status?.filename ?? null);
 
 	// Get base path from layout data
-	let basePath = $derived($page.data.basePath || '');
+	let basePath = $derived.by(() => page.data.basePath || '');
 
 	// Get thumbnail URL
 	let thumbnailUrl = $derived.by(() => {
@@ -117,11 +117,11 @@
 	}
 
 	function calculatePrintETA(status: PrinterStatus): string {
-		// Рассчитываем на основе прогресса
+		// Calculate based on progress
 		if (status.progress > 0 && status.print_duration > 0) {
-			// Рассчитываем среднее время на 1% прогресса
+			// Calculate average time per 1% progress
 			const timePerPercent = status.print_duration / status.progress;
-			// Оставшееся время = время на 1% * оставшиеся %
+			// Remaining time = time per 1% * remaining %
 			const remaining = timePerPercent * (100 - status.progress);
 			return formatETA(remaining, currentLocale);
 		}

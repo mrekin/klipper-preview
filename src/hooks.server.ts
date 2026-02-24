@@ -34,7 +34,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const url = new URL(event.request.url);
 		const token = url.searchParams.get('token');
 		if (token && !validateToken(token)) {
-			return new Response('Ссылка недействительна или истёк срок действия', {
+			return new Response('Link is invalid or has expired', {
 				status: 403,
 				headers: { 'Content-Type': 'text/plain; charset=utf-8' }
 			});
@@ -50,6 +50,6 @@ export const handleError: HandleServerError = ({ error, event }) => {
 	console.error('Server error:', error);
 
 	return {
-		message: 'Произошла ошибка сервера'
+		message: 'A server error has occurred'
 	};
 };

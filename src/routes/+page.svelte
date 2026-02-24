@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { _ as locales } from 'svelte-i18n';
 
 	onMount(async () => {
-		const basePath = $page.data.basePath || '';
+		const basePath = page.data.basePath || '';
 		goto(basePath + '/admin');
 	});
 </script>

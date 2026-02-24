@@ -3,6 +3,21 @@
 		"name": "Klipper Print Share",
 		"redirecting": "Перенаправление..."
 	},
+	"layout": {
+		"welcome": "Добро пожаловать в Klipper Print Share!",
+		"addFirstPrinter": "Добавьте ваш первый принтер для начала работы",
+		"addFirstPrinterBtn": "+ Добавить первый принтер",
+		"title": "Klipper Print Share",
+		"subtitle": "Управление принтерами",
+		"printers": "Принтеры",
+		"addPrinter": "+ Добавить принтер",
+		"defaultPrinter": "Принтер по умолчанию",
+		"settings": "Настройки",
+		"savePrinterError": "Ошибка сохранения принтера"
+	},
+	"viewer": {
+		"layer": "Слой"
+	},
 	"admin": {
 		"title": "Админ-панель",
 		"subtitle": "Панель управления временными ссылками",

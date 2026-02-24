@@ -4,15 +4,15 @@ import { join } from 'node:path';
 import { env } from '$env/dynamic/private';
 import { mkdirSync } from 'node:fs';
 
-// Инициализация БД
+// Database initialization
 const dataDir = join(process.cwd(), 'data');
 const dbPath = env.DATABASE_PATH || join(dataDir, 'tokens.db');
 
-// Создаём директорию если не существует
+// Create directory if it doesn't exist
 mkdirSync(dataDir, { recursive: true });
 
 export const db = new Database(dbPath, { fileMustExist: false });
-// Включаем WAL mode для одновременого чтения/записи
+// Enable WAL mode for concurrent read/write
 db.pragma('journal_mode = WAL');
 
 // Initialize and migrate database
@@ -123,58 +123,58 @@ export interface Setting {
 	value: string;
 }
 
-// Настройки Moonraker URL
+// Moonraker URL settings
 const MOONRAKER_URL_KEY = 'moonraker_url';
 const DEFAULT_MOONRAKER_URL = 'http://192.168.1.100:7125';
 
-// Настройки публичного URL
+// Public URL settings
 const PUBLIC_URL_KEY = 'public_url';
 
-// Настройки языка
+// Language settings
 const LANGUAGE_KEY = 'language';
 const DEFAULT_LANGUAGE = 'en';
 
-// Получение значения настройки
+// Get setting value
 export function getSetting(key: string): string | null {
 	const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
 	const row = stmt.get(key) as any;
 	return row?.value || null;
 }
 
-// Сохранение значения настройки
+// Save setting value
 export function setSetting(key: string, value: string): void {
 	const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
 	stmt.run(key, value);
 }
 
-// Получение URL Moonraker
+// Get Moonraker URL
 export function getMoonrakerUrlSetting(): string {
 	return getSetting(MOONRAKER_URL_KEY) || DEFAULT_MOONRAKER_URL;
 }
 
-// Сохранение URL Moonraker
+// Save Moonraker URL
 export function setMoonrakerUrlSetting(url: string): void {
 	setSetting(MOONRAKER_URL_KEY, url);
 }
 
-// Получение публичного URL
+// Get public URL
 export function getPublicUrlSetting(): string | null {
 	return getSetting(PUBLIC_URL_KEY);
 }
 
-// Сохранение публичного URL
+// Save public URL
 export function setPublicUrlSetting(url: string): void {
 	setSetting(PUBLIC_URL_KEY, url);
 }
 
-// Получение языка
+// Get language
 export function getLanguageSetting(): string {
 	return getSetting(LANGUAGE_KEY) || DEFAULT_LANGUAGE;
 }
 
-// Сохранение языка
+// Save language
 export function setLanguageSetting(lang: string): void {
-	// Валидация языка
+	// Language validation
 	const validLanguages = ['en', 'ru'];
 	if (!validLanguages.includes(lang)) {
 		throw new Error(`Invalid language: ${lang}`);
@@ -195,12 +195,12 @@ export interface Token {
 	printer_name?: string;
 }
 
-// Генерация токена
+// Generate token
 export function generateToken(): string {
 	return randomBytes(24).toString('base64url').slice(0, 32);
 }
 
-// Создание нового токена
+// Create new token
 export function createToken(ttlMinutes: number, filename?: string, comment?: string, printerId?: number): Token {
 	const now = Date.now();
 	const token = generateToken();
@@ -225,7 +225,7 @@ export function createToken(ttlMinutes: number, filename?: string, comment?: str
 	return getToken(token)!;
 }
 
-// Получение токена
+// Get token
 export function getToken(token: string): Token | null {
 	const stmt = db.prepare(`
 		SELECT t.*, p.name as printer_name
@@ -243,17 +243,17 @@ export function getToken(token: string): Token | null {
 	};
 }
 
-// Проверка валидности токена
+// Validate token
 export function validateToken(token: string): boolean {
 	const t = getToken(token);
 	if (!t) return false;
 
-	// Проверка отзыва
+	// Check if revoked
 	if (t.revoked) {
 		return false;
 	}
 
-	// Проверка истечения
+	// Check expiration
 	if (Date.now() > t.expires_at) {
 		return false;
 	}
@@ -261,9 +261,9 @@ export function validateToken(token: string): boolean {
 	return true;
 }
 
-// Получение всех активных токенов
+// Get all active tokens
 export function getAllTokens(printerId?: number): Token[] {
-	// Удаляем истёкшие токены
+	// Remove expired tokens
 	cleanupExpiredTokens();
 
 	let stmt;
@@ -294,7 +294,7 @@ export function getAllTokens(printerId?: number): Token[] {
 	}
 }
 
-// Обновление комментария токена
+// Update token comment
 export function updateTokenComment(token: string, comment: string): boolean {
 	const stmt = db.prepare(`
 		UPDATE tokens SET comment = ? WHERE token = ?
@@ -304,7 +304,7 @@ export function updateTokenComment(token: string, comment: string): boolean {
 	return result.changes > 0;
 }
 
-// Отзыв токена
+// Revoke token
 export function revokeToken(token: string): boolean {
 	const stmt = db.prepare(`
 		UPDATE tokens SET revoked = 1 WHERE token = ?
@@ -314,24 +314,10 @@ export function revokeToken(token: string): boolean {
 	return result.changes > 0;
 }
 
-// Удаление истёкших токенов
+// Delete expired tokens
 export function cleanupExpiredTokens(): void {
 	const stmt = db.prepare(`
 		DELETE FROM tokens WHERE expires_at < ?
 	`);
 	stmt.run(Date.now());
-}
-
-// Форматирование оставшегося времени
-export function formatTimeRemaining(expiresAt: number): string {
-	const remaining = expiresAt - Date.now();
-	if (remaining <= 0) return 'Истёк';
-
-	const hours = Math.floor(remaining / (1000 * 60 * 60));
-	const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-
-	if (hours > 0) {
-		return `${hours}ч ${minutes}мин`;
-	}
-	return `${minutes}мин`;
 }

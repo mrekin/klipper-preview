@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import QRCode from '$lib/components/QRCode.svelte';
 	import { _, locale } from 'svelte-i18n';
@@ -63,7 +63,7 @@
 	let currentLocale = $derived($locale || 'en');
 
 	// Get base path from layout data
-	let basePath = $derived($page.data.basePath || '');
+	let basePath = $derived.by(() => page.data.basePath || '');
 
 	// Helper to build API URLs with base path
 	function apiUrl(path: string): string {
@@ -85,7 +85,7 @@
 		}
 
 		// Priority 2: Layout data (may be stale until reload)
-		const publicUrlSetting = cachedPublicUrl || ($page.data.publicUrl as string) || '';
+		const publicUrlSetting = cachedPublicUrl || (page.data.publicUrl as string) || '';
 		if (publicUrlSetting) {
 			return publicUrlSetting + cleanPath;
 		}
@@ -96,13 +96,13 @@
 
 	// Update cache when page data changes
 	$effect(() => {
-		cachedPublicUrl = ($page.data.publicUrl as string) || null;
+		cachedPublicUrl = (page.data.publicUrl as string) || null;
 	});
 
 	// Derive selected printer from URL (source of truth!)
-	let selectedPrinterId = $derived(
-		$page.url.searchParams.get('printer')
-			? parseInt($page.url.searchParams.get('printer')!)
+	let selectedPrinterId = $derived.by(() =>
+		page.url.searchParams.get('printer')
+			? parseInt(page.url.searchParams.get('printer')!)
 			: null
 	);
 
@@ -125,13 +125,10 @@
 
 	async function loadPrinters() {
 		try {
-			console.log('[Admin] loadPrinters: fetching printers...');
 			const res = await fetch(apiUrl('/api/printers'));
 			if (res.ok) {
 				printers = await res.json();
-				console.log('[Admin] loadPrinters: printers loaded:', printers.length);
 				initialized = true;
-				console.log('[Admin] loadPrinters: initialized = true');
 			}
 		} catch (e) {
 			console.error('[Admin] Error loading printers:', e);
@@ -239,7 +236,6 @@
 	$effect(async () => {
 		const printerId = selectedPrinterId;
 		if (printerId !== null && initialized) {
-			console.log('[Admin] $effect: Loading data for printer:', printerId);
 			await loadData();
 		}
 	});
@@ -263,15 +259,12 @@
 	// Handle initial load without printer in URL
 	$effect(async () => {
 		if (!initialized) {
-			console.log('[Admin] Initial load starting...');
 			await loadPrinters();
-			console.log('[Admin] Initial load completed, printers:', printers.length);
 
 			// If no printer in URL, redirect to default or first printer
 			if (selectedPrinterId === null && printers.length > 0) {
 				const defaultPrinter = printers.find((p) => p.is_default) || printers[0];
 				if (defaultPrinter) {
-					console.log('[Admin] Redirecting to default printer:', defaultPrinter.id);
 					goto(`/admin?printer=${defaultPrinter.id}`, { replaceState: true });
 				}
 			}
@@ -281,7 +274,6 @@
 	// Listen for printers updated event from other components
 	$effect(() => {
 		const handler = () => {
-			console.log('[Admin] Printers updated event received, reloading...');
 			loadPrinters();
 		};
 

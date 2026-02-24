@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { _ as locales } from 'svelte-i18n';
+
 	interface GcodeLineEntry {
 		line: string;
 		filePosition: number;
@@ -485,6 +487,6 @@
 
 	<!-- Layer info -->
 	<div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
-		Слой: {currentLayer} / {totalLayers}
+		{$locales('viewer.layer')}: {currentLayer} / {totalLayers}
 	</div>
 </div>

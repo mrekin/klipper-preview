@@ -9,7 +9,7 @@ import {
 	setLanguageSetting
 } from '$lib/server/tokens';
 
-// Получить настройки
+// Get settings
 export const GET: RequestHandler = async () => {
 	const moonrakerUrl = getMoonrakerUrlSetting();
 	const publicUrl = getPublicUrlSetting();
@@ -17,9 +17,9 @@ export const GET: RequestHandler = async () => {
 	return json({ moonrakerUrl, publicUrl, language });
 };
 
-// Валидация формата публичного URL
+// Validate public URL format
 function isValidPublicUrl(url: string): boolean {
-	if (!url) return true; // Пустое значение - валидно (отключение)
+	if (!url) return true; // Empty value is valid (disabled)
 	try {
 		new URL(url);
 		return url.startsWith('http://') || url.startsWith('https://');
@@ -28,7 +28,7 @@ function isValidPublicUrl(url: string): boolean {
 	}
 }
 
-// Сохранить настройки
+// Save settings
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
 	const { moonrakerUrl, publicUrl, language } = body;
@@ -38,7 +38,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	if (publicUrl !== undefined) {
-		// Валидация: пустая строка - это валидное значение (отключение)
+		// Validation: empty string is a valid value (disabled)
 		if (publicUrl === '' || isValidPublicUrl(publicUrl)) {
 			setPublicUrlSetting(publicUrl);
 		} else {
