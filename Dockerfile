@@ -36,8 +36,6 @@ COPY --from=builder /app/node_modules ./node_modules
 RUN mkdir -p /data
 
 # Environment
-ENV NODE_ENV=production
-ENV DATABASE_PATH=/data/tokens.db
 ENV HOST=0.0.0.0
 ENV PORT=3000
 

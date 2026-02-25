@@ -1,99 +1,119 @@
 # Klipper Print Share
 
-Сервис для расшаривания статуса 3D-печати по временным ссылкам.
+Service for sharing 3D printing status via temporary links.
 
-## Возможности
+## 1. Use Cases
 
-- 📊 **Просмотр прогресса** — процент завершения, текущий слой, время
-- 🌡️ **Мониторинг температур** — сопло и стол в реальном времени
-- 🎨 **Визуализация G-code** — интерактивный preview как в Fluidd
-- 🔗 **Временные ссылки** — настраиваемый TTL с шагом 30 минут
-- 🔒 **Read-only доступ** — заказчик видит, но не управляет
+### 1.1 Key Features
 
-## Технологии
+- **Progress tracking** - completion percentage, current layer, elapsed/remaining time
+- **Real-time temperature monitoring** - extruder and bed temperatures
+- **G-code visualization** - interactive preview similar to Fluidd
+- **Multiple printers support** - manage and share links for multiple printers
+- **QR codes** - generate QR codes for easy link sharing
+- **Model thumbnails** - preview model images on view page
+- **Temporary links** - configurable TTL with 30-minute steps
+- **Read-only access** - customers can view but cannot control the printer
+- **i18n support** - English and Russian languages available
 
-- **SvelteKit** — full-stack фреймворк
-- **Skeleton UI** — компоненты интерфейса
-- **SQLite** — хранение токенов
-- **Canvas API** — визуализация G-code
-- **Docker + Caddy** — развёртывание
+## 2. Installation
 
-## Быстрый старт
+### 2.1 Development
 
-### Разработка
+Run locally without Docker:
 
 ```bash
-# Установка зависимостей
+# Install dependencies
+npm install
+# or
 bun install
 
-# Запуск dev сервера
+# Create .env file (optional for dev)
+cp .env.example .env
+
+# Run dev server
+npm run dev
+# or
 bun run dev
 ```
 
-### Production (Docker)
+The app will be available at `http://localhost:5173`
+
+### 2.2 Production (Docker)
+
+#### Prerequisites
+
+- Docker and Docker Compose
+- Moonraker API access (local network)
+
+#### Configuration
 
 ```bash
-# Настройка окружения
-cp .env.example .env
-# Отредактируйте .env, укажите IP Moonraker
-
-# Сборка и запуск
-docker-compose up -d
+# Build and run
+docker compose up -d
 ```
 
-## Настройка
+The app will be available at `http://localhost:3000`
 
-### Переменные окружения
+**Environment variables** (set in `docker-compose.yml`):
 
-| Переменная | Описание | По умолчанию |
-|------------|----------|--------------|
-| `MOONRAKER_URL` | URL Moonraker API | `http://192.168.1.100:7125` |
-| `DATABASE_PATH` | Путь к БД токенов | `/data/tokens.db` |
-| `PUBLIC_BASE_URL` | Публичный URL (для ссылок) | — |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_PATH` | Path to tokens database (inside container) | `/data/tokens.db` |
 
-### Caddy
+To configure printers, open `/admin/settings` in your browser.
 
-Отредактируйте `Caddyfile`, заменив `print.example.com` на ваш домен.
+### 2.3 Caddy Configuration (Optional)
 
-Для доступа к админ-панели только из локальной сети используется директива `remote_ip`.
+Caddy is used as an optional reverse proxy for HTTPS and base path support.
 
-## Структура проекта
+Copy `Caddyfile.example` to `Caddyfile` and configure:
 
-```
-src/
-├── routes/
-│   ├── view/[token]/       # Страница просмотра
-│   ├── admin/              # Админ-панель
-│   │   └── settings/       # Настройки Moonraker
-│   └── api/
-│       ├── status/         # API статуса принтера
-│       ├── gcode/[token]/  # API G-code файлов
-│       └── tokens/         # CRUD токенов
-├── lib/
-│   ├── components/
-│   │   └── GCodeViewer.svelte
-│   └── server/
-│       ├── moonraker.ts    # Клиент Moonraker API
-│       └── tokens.ts       # Управление токенами
-└── app.html
+```caddy
+your-domain.com {
+    @allowedKlipper {
+        path_regexp ^/klipper/(view|_app|api/(status|gcode|token|config/base-path|thumbnail))
+    }
+
+    handle @allowedKlipper {
+        uri strip_prefix /klipper
+        reverse_proxy localhost:3000 {
+            header_up X-Base-Path /klipper
+        }
+    }
+
+    handle / {
+        redir /klipper/view
+    }
+}
 ```
 
-## API Moonraker
+**Important notes:**
+- Replace `your-domain.com` with your actual domain
+- Adjust the reverse_proxy URL to match your app's address
+- The `X-Base-Path` header tells the app it's running under `/klipper` prefix
+- `thumbnail` endpoint is required for model preview images
 
-Используемые эндпоинты:
+## 3. Moonraker API
 
-- `GET /printer/objects/query` — статус принтера
-- `GET /server/files/metadata` — метаданные файла
-- `GET /server/files/gcodes/{filename}` — скачивание G-code
-- `WebSocket /websocket` — real-time обновления
+Endpoints used:
 
-## Использование
+- `GET /printer/objects/query` - printer status
+- `GET /server/files/metadata` - file metadata
+- `GET /server/files/gcodes/{filename}` - download G-code
+- `GET /server/files/gcodes/{filename}/bigthumbnail` - model thumbnail
+- `WebSocket /websocket` - real-time updates
 
-1. Откройте `/admin` из локальной сети
-2. Нажмите кнопку с нужным TTL (или введите произвольное время)
-3. Скопируйте ссылку и отправьте заказчику
-4. Заказчик видит прогресс печати без возможности управления
+## 4. Usage
 
-## Лицензия
+1. Open `/admin` from your local network
+2. Select a printer (if multiple configured)
+3. Click a button with desired TTL (or enter custom time)
+4. Optionally add a comment for the link
+5. Copy the generated link or scan the QR code
+6. Share with your customer
+7. Customer views print progress without control access
 
-MIT
+## 5. License
+
+CC-BY-4.0
