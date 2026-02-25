@@ -2,6 +2,8 @@
 
 Service for sharing 3D printing status via temporary links.
 
+Works with Moonraker API (KliperPreview -> Moonraker API -> Klipper (printer) )
+
 ### Admin page
 <img width="1050" height="727" alt="Screenshot 2026-02-25 124615" src="https://github.com/user-attachments/assets/79bcd4fd-d31b-433c-a004-1d21e191448c" />
 
@@ -52,7 +54,7 @@ npm run dev
 bun run dev
 ```
 
-The app will be available at `http://localhost:5173`
+The app will be available at `http://localhost:3000/admin`
 
 ### 2.2 Production (Docker)
 
@@ -61,14 +63,42 @@ The app will be available at `http://localhost:5173`
 - Docker and Docker Compose
 - Moonraker API access (local network)
 
-#### Configuration
+#### Get image
+
+```
+docker pull ghcr.io/mrekin/klipper-preview:latest
+```
+
+Write docker compose file
+
+```
+services:
+  app:
+    image: ghcr.io/mrekin/klipper-preview:latest
+    container_name: klipper-print-share
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_PATH=/data/tokens.db
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    networks:
+      - print-share-network
+
+networks:
+  print-share-network:
+    driver: bridge
+```
+
 
 ```bash
-# Build and run
+# Run
 docker compose up -d
 ```
 
-The app will be available at `http://localhost:3000`
+
+The app will be available at `http://localhost:3000/admin`
 
 **Environment variables** (set in `docker-compose.yml`):
 
@@ -119,6 +149,25 @@ Endpoints used:
 - `GET /server/files/gcodes/{filename}/bigthumbnail` - model thumbnail
 - `WebSocket /websocket` - real-time updates
 
-## 4. License
+## 4. Check list
+
+- [x] Admin page
+- [x] Settings page
+- [x] View page
+    - [x] Gcode preview
+    - [x] Thumble preview
+    - [x] Print process info
+    - [ ] Websocket support
+    - [ ] Camera support
+- [x] Multiple printers support
+- [x] i18n support
+- [ ] Admin auth
+- [ ] Moonraker auth
+- [ ] Links/tokens
+  - [x] Time limited links
+  - [ ] Expire link after print process finished
+  - [ ] Access, based on current filename
+
+## 5. License
 
 CC-BY-4.0
