@@ -2,7 +2,22 @@
 
 Service for sharing 3D printing status via temporary links.
 
-## 1. Use Cases
+### Admin page
+<img width="1050" height="727" alt="Screenshot 2026-02-25 124615" src="https://github.com/user-attachments/assets/79bcd4fd-d31b-433c-a004-1d21e191448c" />
+
+### View page
+<img width="1022" height="719" alt="image" src="https://github.com/user-attachments/assets/ebef16d3-ac58-4850-865b-3381ffcee157" />
+
+
+## 1. Usage
+
+1. Open `/admin` from your local network
+2. Select a printer (if multiple configured)
+3. Click a button with desired TTL (or enter custom time)
+4. Optionally add a comment for the link
+5. Copy the generated link or scan the QR code
+6. Share with your customer
+7. Customer views print progress without control access
 
 ### 1.1 Key Features
 
@@ -104,16 +119,6 @@ Endpoints used:
 - `GET /server/files/gcodes/{filename}/bigthumbnail` - model thumbnail
 - `WebSocket /websocket` - real-time updates
 
-## 4. Usage
-
-1. Open `/admin` from your local network
-2. Select a printer (if multiple configured)
-3. Click a button with desired TTL (or enter custom time)
-4. Optionally add a comment for the link
-5. Copy the generated link or scan the QR code
-6. Share with your customer
-7. Customer views print progress without control access
-
-## 5. License
+## 4. License
 
 CC-BY-4.0
