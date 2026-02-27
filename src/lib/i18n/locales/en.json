@@ -16,7 +16,8 @@
 		"savePrinterError": "Error saving printer"
 	},
 	"viewer": {
-		"layer": "Layer"
+		"layer": "Layer",
+		"current": "current"
 	},
 	"admin": {
 		"title": "Admin Panel",

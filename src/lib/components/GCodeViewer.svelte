@@ -42,10 +42,9 @@
 	let layers = $state<{ z: number; moves: Move[] }[]>([]);
 	let lastParsedLength = 0;
 
-	// Display layer tracking
-	let displayLayer = $derived.by(() => {
-		return Math.min(Math.max(0, currentLayer), layers.length - 1);
-	});
+	// Display layer tracking - separate from currentLayer for manual navigation
+	let displayLayer = $state(0);
+	let isUserNavigating = $state(false);
 
 	// Separate function for scaling and centering
 	function fitToView(padding = 20) {
@@ -275,28 +274,31 @@
 		}
 
 		// Render layers
-		// currentLayer is 1-based from Klipper, need 0-based for array: currentLayer - 1
-		const layerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		// Use displayLayer directly for user-controlled layer navigation
+		const layerIndex = displayLayer;
 
-		// Find last executed move on current layer
-		const currentLayerMoves = layers[layerIndex]?.moves || [];
-		const lastExecutedIndex = filePosition && filePosition > 0
-			? findLastExecutedMoveIndex(currentLayerMoves, filePosition)
-			: currentLayerMoves.length - 1; // Fallback: entire layer printed
+		// Calculate current printed layer for split layer display
+		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
 
-		// Printed layers (gray) - render all layers BEFORE current
+		// Printed layers (gray) - render all layers BEFORE displayed layer
 		for (let i = 0; i < layerIndex && i < layers.length; i++) {
 			drawLayerFull(layers[i], '#4a4a6a');
 		}
 
-		// Current layer: split into two parts
+		// Displayed layer - three rendering modes based on layer state
 		if (layerIndex < layers.length && layerIndex >= 0) {
 			const layer = layers[layerIndex];
 
 			// Skip if layer has no moves
 			if (layer.moves.length === 0) {
 				// Empty layer - skip rendering
-			} else {
+			} else if (layerIndex === currentPrintedLayerIndex) {
+				// This is the current printed layer - show split (blue + gray semi-transparent)
+				const currentLayerMoves = layer.moves;
+				const lastExecutedIndex = filePosition && filePosition > 0
+					? findLastExecutedMoveIndex(currentLayerMoves, filePosition)
+					: currentLayerMoves.length - 1;
+
 				// Printed part (blue)
 				if (lastExecutedIndex >= 0) {
 					drawLayerPartial(layer, '#3b82f6', 0, lastExecutedIndex);
@@ -304,10 +306,18 @@
 
 				// Remaining part (gray semi-transparent)
 				if (lastExecutedIndex + 1 < layer.moves.length) {
-					ctx.globalAlpha = 0.5; // Semi-transparency
+					ctx.globalAlpha = 0.5;
 					drawLayerPartial(layer, '#6a6a8a', lastExecutedIndex + 1, layer.moves.length - 1);
-					ctx.globalAlpha = 1.0; // Reset
+					ctx.globalAlpha = 1.0;
 				}
+			} else if (layerIndex < currentPrintedLayerIndex) {
+				// Already printed layer - full blue
+				drawLayerFull(layer, '#3b82f6');
+			} else {
+				// Future layer - full gray semi-transparent
+				ctx.globalAlpha = 0.5;
+				drawLayerFull(layer, '#6a6a8a');
+				ctx.globalAlpha = 1.0;
 			}
 		}
 
@@ -375,18 +385,27 @@
 		isDragging = false;
 	}
 
-	function zoomIn() {
-		scale *= 1.2;
-		render();
+	// Navigation functions for layer control
+	function nextLayer() {
+		if (displayLayer < layers.length - 1) {
+			displayLayer++;
+			isUserNavigating = true;
+			render();
+		}
 	}
 
-	function zoomOut() {
-		scale = Math.max(0.1, scale / 1.2);
-		render();
+	function prevLayer() {
+		if (displayLayer > 0) {
+			displayLayer--;
+			isUserNavigating = true;
+			render();
+		}
 	}
 
-	function resetView() {
-		fitToView(40);
+	function goToCurrentLayer() {
+		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		displayLayer = currentPrintedLayerIndex;
+		isUserNavigating = false;
 		render();
 	}
 
@@ -395,6 +414,10 @@
 		if (gcodeLines.length > 0 && canvas && gcodeLines.length !== lastParsedLength) {
 			parseGcode(gcodeLines);
 			lastParsedLength = gcodeLines.length;
+			// Initialize displayLayer to current printed layer after parsing
+			if (!isUserNavigating) {
+				displayLayer = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+			}
 		}
 	});
 
@@ -403,23 +426,26 @@
 	let lastRenderedLayersCount = -1;
 	let lastRenderedPosition = '-1,-1,-1';
 	let lastRenderedFilePosition = -1;
+	let lastRenderedCurrentLayer = -1;
 
 	$effect(() => {
 		const shouldRender = layers.length > 0 && ctx && canvas;
 		if (!shouldRender) return;
 
-		const layerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
 		const positionKey = `${nozzlePosition?.x},${nozzlePosition?.y},${nozzlePosition?.z}`;
-		const needsRender = layerIndex !== lastRenderedLayer ||
+		const needsRender = displayLayer !== lastRenderedLayer ||
 							layers.length !== lastRenderedLayersCount ||
 							positionKey !== lastRenderedPosition ||
-							filePosition !== lastRenderedFilePosition;
+							filePosition !== lastRenderedFilePosition ||
+							currentPrintedLayerIndex !== lastRenderedCurrentLayer;
 
 		if (needsRender) {
-			lastRenderedLayer = layerIndex;
+			lastRenderedLayer = displayLayer;
 			lastRenderedLayersCount = layers.length;
 			lastRenderedPosition = positionKey;
 			lastRenderedFilePosition = filePosition;
+			lastRenderedCurrentLayer = currentPrintedLayerIndex;
 			render();
 		}
 	});
@@ -466,20 +492,22 @@
 	<!-- Controls -->
 	<div class="absolute top-4 right-4 flex flex-col gap-2">
 		<button
-			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl"
-			onclick={zoomIn}
+			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+			onclick={nextLayer}
+			disabled={displayLayer >= layers.length - 1}
 		>
 			+
 		</button>
 		<button
-			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl"
-			onclick={zoomOut}
+			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+			onclick={prevLayer}
+			disabled={displayLayer <= 0}
 		>
 			−
 		</button>
 		<button
 			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-sm"
-			onclick={resetView}
+			onclick={goToCurrentLayer}
 		>
 			⌂
 		</button>
@@ -487,6 +515,7 @@
 
 	<!-- Layer info -->
 	<div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
-		{$locales('viewer.layer')}: {currentLayer} / {totalLayers}
+		{$locales('viewer.layer')}: {displayLayer + 1} / {totalLayers}
+		{displayLayer !== Math.min(Math.max(0, currentLayer - 1), layers.length - 1) ? ` (${$locales('viewer.current')}: ${currentLayer})` : ''}
 	</div>
 </div>

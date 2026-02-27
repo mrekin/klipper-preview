@@ -16,7 +16,8 @@
 		"savePrinterError": "Ошибка сохранения принтера"
 	},
 	"viewer": {
-		"layer": "Слой"
+		"layer": "Слой",
+		"current": "текущий"
 	},
 	"admin": {
 		"title": "Админ-панель",
