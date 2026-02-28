@@ -21,40 +21,17 @@ export const GET: RequestHandler = async ({ params, url }) => {
 	
 	try {
 		const gcode = await fetchGcode(filename, tokenData?.printer_id || undefined);
-		
+
 		if (!gcode) {
 			return json({ error: 'G-code file not found' }, { status: 404 });
 		}
-		
-		// Return movement lines (G0/G1 + LAYER markers) with file positions
-		// This allows frontend to determine which part of the current layer has been printed
-		interface GcodeLineEntry {
-			line: string;
-			filePosition: number;
-		}
 
-		const lines = gcode.split('\n');
-		const movementLines: GcodeLineEntry[] = [];
-		let currentBytePosition = 0;
-
-		for (const line of lines) {
-			const trimmed = line.trim();
-			const lineLength = line.length + 1; // +1 for newline character
-
-			if (trimmed.startsWith('G0') || trimmed.startsWith('G1') ||
-			    trimmed.startsWith(';LAYER:') || trimmed.startsWith('; layer')) {
-				movementLines.push({
-					line: trimmed,
-					filePosition: currentBytePosition
-				});
-			}
-
-			currentBytePosition += lineLength;
-		}
-
+		// Return full G-code text - no size limit
+		// Frontend will parse it in WebWorker for better performance
 		return json({
 			filename,
-			lines: movementLines.slice(0, 50000) // Limit for large files
+			gcode, // Full G-code text
+			size: gcode.length
 		});
 	} catch (error) {
 		return json({ error: 'Failed to fetch G-code' }, { status: 500 });

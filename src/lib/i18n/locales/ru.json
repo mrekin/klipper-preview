@@ -17,7 +17,10 @@
 	},
 	"viewer": {
 		"layer": "Слой",
-		"current": "текущий"
+		"current": "текущий",
+		"parsing": "Парсинг G-code...",
+		"parseError": "Ошибка парсинга",
+		"loading": "Загрузка..."
 	},
 	"admin": {
 		"title": "Админ-панель",

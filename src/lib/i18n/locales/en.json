@@ -17,7 +17,10 @@
 	},
 	"viewer": {
 		"layer": "Layer",
-		"current": "current"
+		"current": "current",
+		"parsing": "Parsing G-code...",
+		"parseError": "Parse error",
+		"loading": "Loading..."
 	},
 	"admin": {
 		"title": "Admin Panel",

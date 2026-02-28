@@ -32,7 +32,7 @@
 	}
 
 	let status: PrinterStatus | null = $state(null);
-	let gcodeLines: Array<{ line: string; filePosition: number }> = $state([]);
+	let gcodeData = $state('');
 	let loading = $state(true);
 	let error: string | null = $state(null);
 	let token: string = $derived.by(() => page.url.searchParams.get('token') || '');
@@ -106,7 +106,7 @@
 
 			if (res.ok) {
 				const data = await res.json();
-				gcodeLines = data.lines || [];
+				gcodeData = data.gcode || '';
 				loadedFilename = filename;
 			} else {
 				console.error('[GCODE] Error response:', res.status, await res.text().catch(() => ''));
@@ -314,9 +314,9 @@
 						<p class="text-sm text-surface-400">{$_('view.gcodePreview')}</p>
 					</div>
 					<div class="h-[400px] lg:h-[500px]">
-						{#if gcodeLines.length > 0}
+						{#if gcodeData}
 							<GCodeViewer
-								gcodeLines={gcodeLines}
+								gcodeData={gcodeData}
 								currentLayer={status.current_layer}
 								totalLayers={status.total_layers}
 								nozzlePosition={status.position || { x: 0, y: 0, z: 0 }}

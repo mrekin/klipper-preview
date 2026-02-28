@@ -1,30 +1,31 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import { _ as locales } from 'svelte-i18n';
-
-	interface GcodeLineEntry {
-		line: string;
-		filePosition: number;
-	}
-
-	interface Move {
-		x: number;
-		y: number;
-		type: 'move' | 'extrude';
-		filePosition: number;
-	}
+	import type {
+		GCodeParseResult,
+		GCodeLayer,
+		GCodeMoveType,
+		WorkerOutputMessage
+	} from '$lib/types';
 
 	interface Props {
-		gcodeLines: GcodeLineEntry[];
+		gcodeData: string; // Full G-code text
 		currentLayer: number;
 		totalLayers: number;
 		nozzlePosition: { x: number; y: number; z: number };
 		filePosition: number;
 	}
 
-	let { gcodeLines, currentLayer = 0, totalLayers = 100, nozzlePosition, filePosition = 0 }: Props = $props();
+	let { gcodeData, currentLayer = 0, totalLayers = 100, nozzlePosition, filePosition = 0 }: Props =
+		$props();
 
 	let canvas: HTMLCanvasElement | null = $state(null);
 	let ctx: CanvasRenderingContext2D | null = $state(null);
+
+	// Layer cache for performance
+	let layerCache = new Map<number, ImageBitmap>();
+	let cacheValid = $state(false);
 
 	// Display parameters
 	let scale = $state(1);
@@ -34,23 +35,192 @@
 	let lastX = $state(0);
 	let lastY = $state(0);
 
-	// Model bounds
-	let minX = Infinity, maxX = -Infinity;
-	let minY = Infinity, maxY = -Infinity;
+	// Parser state
+	let parseResult: GCodeParseResult | null = $state(null);
+	let parseProgress = $state(0);
+	let isParsing = $state(false);
+	let parseError = $state<string | null>(null);
 
-	// Parsed data
-	let layers = $state<{ z: number; moves: Move[] }[]>([]);
-	let lastParsedLength = 0;
-
-	// Display layer tracking - separate from currentLayer for manual navigation
+	// Display layer tracking
 	let displayLayer = $state(0);
 	let isUserNavigating = $state(false);
 
-	// Separate function for scaling and centering
+	// Computed layers (computed once when parseResult changes)
+	let computedLayers: GCodeLayer[] = $state([]);
+
+	// Compute layers from parseResult
+	$effect(() => {
+		if (!parseResult) {
+			computedLayers = [];
+			return;
+		}
+
+		// If parser created layers, use them
+		if (parseResult.layers.length > 0) {
+			computedLayers = parseResult.layers;
+			return;
+		}
+
+		console.log('[computeLayers] Computing layers from moves...');
+		const startTime = performance.now();
+
+		// Fallback: create layers from moves (same logic as Fluidd)
+		const output: GCodeLayer[] = [];
+		const moves = parseResult.moves;
+
+		let z = NaN;
+		let zStart = 0;
+		let zLast = NaN;
+		let zNext = NaN;
+		const minLayerHeight = 0.2;
+
+		for (let i = 0; i < moves.length; i++) {
+			const move = moves[i];
+			if (move.z !== undefined && z !== move.z) {
+				z = move.z;
+				zStart = i;
+			}
+
+			if (move.e !== undefined && move.e > 0 && (Number.isNaN(zLast) || z < zLast || z >= zNext)) {
+				const hasXYMovement = (move.x !== undefined && move.x !== 0) || (move.y !== undefined && move.y !== 0);
+				if (hasXYMovement) {
+					zLast = z;
+					zNext = Math.round((z + minLayerHeight) * 10000) / 10000;
+
+					output.push({
+						z,
+						move: zStart,
+						filePosition: move.filePosition
+					});
+				}
+			}
+		}
+
+		// If moves exist but there are no layers, add a single "default" layer at z=0
+		if (output.length === 0 && moves.length > 0) {
+			output.push({
+				z: 0,
+				move: 0,
+				filePosition: moves[0].filePosition
+			});
+		}
+
+		computedLayers = output;
+		console.log('[computeLayers] Computed', output.length, 'layers in', (performance.now() - startTime).toFixed(2), 'ms');
+	});
+
+	// Simple getter for layers
+	let getLayers = () => computedLayers;
+
+	// WebWorker
+	let worker: Worker | null = null;
+
+	// Create worker immediately when component is created (not in onMount for Svelte 5 runes)
+	if (browser) {
+		console.log('[GCodeViewer] Creating worker...');
+
+		// Create Worker
+		try {
+			worker = new Worker(new URL('../workers/gcode.worker.ts', import.meta.url), {
+				type: 'module'
+			});
+			console.log('[GCodeViewer] Worker created successfully');
+		} catch (e) {
+			console.error('[GCodeViewer] Failed to create worker:', e);
+			parseError = 'Failed to create worker: ' + (e instanceof Error ? e.message : String(e));
+		}
+
+		worker.onmessage = (event: MessageEvent<WorkerOutputMessage>) => {
+			const message = event.data;
+			console.log('[GCodeViewer] Worker message:', message.action);
+
+			if (message.action === 'progress') {
+				parseProgress = (message.filePosition / message.total) * 100;
+			} else if (message.action === 'result') {
+				console.log('[GCodeViewer] Parse result received:', {
+					moves: message.result.moves.length,
+					layers: message.result.layers.length,
+					bounds: message.result.bounds
+				});
+				parseResult = message.result;
+				isParsing = false;
+				parseProgress = 100;
+				// Initialize display
+				initializeView();
+			} else if (message.action === 'error') {
+				console.error('[GCodeViewer] Worker error:', message.error);
+				parseError = message.error;
+				isParsing = false;
+			}
+		};
+
+		worker.onerror = (e) => {
+			console.error('[GCodeViewer] Worker error event:', e);
+			parseError = 'Worker error: ' + (e?.message || 'Unknown error');
+			isParsing = false;
+		};
+	}
+
+	// Cleanup on unmount
+	$effect(() => {
+		return () => {
+			console.log('[GCodeViewer] Cleanup - terminating worker');
+			worker?.terminate();
+		};
+	});
+
+	// Parse G-code when data changes
+	$effect(() => {
+		console.log('[GCodeViewer] $effect triggered', {
+			hasGcodeData: !!gcodeData,
+			gcodeDataLength: gcodeData?.length || 0,
+			hasWorker: !!worker,
+			isParsing,
+			hasParseResult: !!parseResult
+		});
+
+		// Wait for worker to be created in onMount
+		if (!worker) {
+			console.log('[GCodeViewer] Worker not ready yet, waiting...');
+			return;
+		}
+
+		if (gcodeData && !isParsing && !parseResult) {
+			console.log('[GCodeViewer] Starting parse, gcode length:', gcodeData.length);
+			isParsing = true;
+			parseProgress = 0;
+			parseError = null;
+
+			worker.postMessage({
+				action: 'parse',
+				gcode: gcodeData
+			});
+		}
+	});
+
+	// Initialize view after parsing
+	function initializeView() {
+		if (!parseResult || !canvas) return;
+
+		// Fit to view
+		fitToView(20);
+
+		// Initialize displayLayer to current printed layer
+		if (!isUserNavigating) {
+			displayLayer = Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
+		}
+
+		render();
+	}
+
+	// Fit model to view
 	function fitToView(padding = 20) {
-		if (canvas && layers.length > 0 && maxX > minX && maxY > minY) {
-			const modelWidth = maxX - minX;
-			const modelHeight = maxY - minY;
+		if (canvas && parseResult && parseResult.bounds) {
+			const bounds = parseResult.bounds;
+			const modelWidth = bounds.x.max - bounds.x.min;
+			const modelHeight = bounds.y.max - bounds.y.min;
+
+			console.log('[fitToView] bounds:', bounds, 'modelSize:', { w: modelWidth, h: modelHeight });
 
 			scale = Math.min(
 				(canvas.width - padding * 2) / modelWidth,
@@ -58,109 +228,18 @@
 			);
 
 			// Center model on canvas
-			offsetX = (canvas.width - modelWidth * scale) / 2 - minX * scale;
-			offsetY = (canvas.height - modelHeight * scale) / 2 - minY * scale;
+			offsetX = (canvas.width - modelWidth * scale) / 2 - bounds.x.min * scale;
+			offsetY = (canvas.height - modelHeight * scale) / 2 - bounds.y.min * scale;
+
+			console.log('[fitToView] scale:', scale.toFixed(4), 'offset:', { x: offsetX.toFixed(2), y: offsetY.toFixed(2) });
 		}
-	}
-
-	// Parse G-code
-	function parseGcode(entries: GcodeLineEntry[]) {
-		layers = [];
-		let currentZ = 0;
-		let currentLayerMoves: Move[] = [];
-		let x = 0, y = 0;
-		let currentE = 0;
-
-		// Reset bounds
-		minX = Infinity; maxX = -Infinity;
-		minY = Infinity; maxY = -Infinity;
-
-		let moveCount = 0;
-		let layerCount = 0;
-
-		for (const entry of entries) {
-			const trimmed = entry.line.trim();
-
-			// Layer detection - support more marker variants
-			if (trimmed.startsWith(';LAYER:') ||
-				trimmed.startsWith(';LAYER;') ||
-				trimmed.startsWith('; layer ') ||
-				trimmed.startsWith(';LAYER:') ||
-				trimmed.startsWith(';LAYER:')) {
-				if (currentLayerMoves.length > 0) {
-					layers.push({ z: currentZ, moves: [...currentLayerMoves] });
-					layerCount++;
-				}
-				currentLayerMoves = [];
-				const zMatch = trimmed.match(/(\d+\.?\d*)/);
-				if (zMatch) {
-					currentZ = parseFloat(zMatch[1]);
-				}
-				continue;
-			}
-
-			// Parse G0/G1 commands
-			if (trimmed.startsWith('G0') || trimmed.startsWith('G1')) {
-				const parts = trimmed.split(/\s+/);
-				let newX = x, newY = y, newE = currentE;
-				let isMove = trimmed.startsWith('G0');
-				let hasX = false, hasY = false;
-
-				for (const part of parts) {
-					if (part.startsWith('X')) {
-						newX = parseFloat(part.slice(1));
-						hasX = !isNaN(newX);
-					} else if (part.startsWith('Y')) {
-						newY = parseFloat(part.slice(1));
-						hasY = !isNaN(newY);
-					} else if (part.startsWith('E')) {
-						newE = parseFloat(part.slice(1));
-					}
-				}
-
-				// Update bounds only if coordinates actually changed
-				if (hasX) {
-					minX = Math.min(minX, newX);
-					maxX = Math.max(maxX, newX);
-				}
-				if (hasY) {
-					minY = Math.min(minY, newY);
-					maxY = Math.max(maxY, newY);
-				}
-
-				if (hasX && hasY) {
-					// Determine movement type: move or extrude
-					const type = isMove || newE <= currentE ? 'move' : 'extrude';
-					currentLayerMoves.push({
-						x: newX,
-						y: newY,
-						type,
-						filePosition: entry.filePosition
-					});
-					x = newX;
-					y = newY;
-					currentE = newE;
-					moveCount++;
-				}
-			}
-		}
-
-		// Add last layer
-		if (currentLayerMoves.length > 0) {
-			layers.push({ z: currentZ, moves: [...currentLayerMoves] });
-			layerCount++;
-		}
-
-		// Scale and center model
-		fitToView(20);
-		render();
 	}
 
 	// Binary search to find last executed move on layer based on filePosition
-	function findLastExecutedMoveIndex(moves: Move[], currentFilePosition: number): number {
+	function findLastExecutedMoveIndex(moves: GCodeMoveType[], currentFilePosition: number): number {
 		if (moves.length === 0) return -1;
 
-		// Protect against overflow - clamp to max filePosition in moves
+		// Protect against overflow
 		const maxFilePosition = moves[moves.length - 1].filePosition;
 		const effectivePosition = Math.min(currentFilePosition, maxFilePosition);
 
@@ -172,76 +251,116 @@
 			const mid = Math.floor((left + right) / 2);
 
 			if (moves[mid].filePosition <= effectivePosition) {
-				result = mid; // This move has been executed
-				left = mid + 1; // Search further right
+				result = mid;
+				left = mid + 1;
 			} else {
-				right = mid - 1; // Search left
+				right = mid - 1;
 			}
 		}
 
 		return result;
 	}
 
-	// Render partial layer (from startIndex to endIndex)
-	function drawLayerPartial(layer: typeof layers[0], color: string, startIndex: number, endIndex: number) {
-		if (!ctx || !canvas || startIndex > endIndex || startIndex >= layer.moves.length) return;
+	// Get toolhead position before a given move index (like Fluidd's getToolHeadPosition)
+	function getToolHeadPosition(moveIndex: number) {
+		const output = { x: 0, y: 0, z: 0 };
+		const moves = parseResult?.moves ?? [];
 
-		ctx.strokeStyle = color;
-		ctx.lineWidth = 1;
-		ctx.beginPath();
-
-		let lastX: number | null = null;
-		let lastY: number | null = null;
-
-		for (let i = startIndex; i <= endIndex && i < layer.moves.length; i++) {
-			const move = layer.moves[i];
-			const x = move.x * scale + offsetX;
-			const y = canvas.height - (move.y * scale + offsetY);
-
-			if (move.type === 'extrude' && lastX !== null && lastY !== null) {
-				ctx.moveTo(lastX, lastY);
-				ctx.lineTo(x, y);
-			}
-
-			lastX = x;
-			lastY = y;
+		// Look back up to 3 moves to find x, y, z
+		for (let i = moveIndex, count = 0; i >= 0 && count < 3; i--) {
+			const move = moves[i];
+			if (move?.x !== undefined && output.x === 0) { output.x = move.x; count++; }
+			if (move?.y !== undefined && output.y === 0) { output.y = move.y; count++; }
+			if (move?.z !== undefined && output.z === 0) { output.z = move.z; count++; }
 		}
 
-		ctx.stroke();
+		return output;
 	}
 
-	// Render full layer
-	function drawLayerFull(layer: typeof layers[0], color: string) {
-		if (!ctx || !canvas || layer.moves.length === 0) return;
+	// Render partial layer
+	function drawLayerPartial(
+		layer: GCodeLayer,
+		color: string,
+		startIndex: number,
+		endIndex: number
+	) {
+		if (!ctx || !canvas || !parseResult || startIndex > endIndex) return;
+
+		const startTime = performance.now();
+		const moves = parseResult.moves;
+		const end = Math.min(endIndex, moves.length - 1);
 
 		ctx.strokeStyle = color;
 		ctx.lineWidth = 0.5;
 		ctx.beginPath();
 
+		// Initialize toolhead position from previous moves (like Fluidd)
+		const startPos = getToolHeadPosition(Math.max(0, startIndex - 1));
+		let currentState = { ...startPos };
+
 		let lastX: number | null = null;
 		let lastY: number | null = null;
+		let traveling = true; // Track if we're in travel mode (like Fluidd)
 
-		for (const move of layer.moves) {
-			const x = move.x * scale + offsetX;
-			const y = canvas.height - (move.y * scale + offsetY);
+		const actualStart = Math.max(startIndex, layer.move);
 
-			if (move.type === 'extrude' && lastX !== null && lastY !== null) {
-				ctx.moveTo(lastX, lastY);
-				ctx.lineTo(x, y);
+		// Count moves with/without extrusion
+		let extrusionMoves = 0;
+		let travelMoves = 0;
+		let pointsLogged = 0;
+
+		for (let i = actualStart; i <= end; i++) {
+			const move = moves[i];
+
+			// Get current position BEFORE updating (like Fluidd's toolhead)
+			const startX = currentState.x * scale + offsetX;
+			const startY = canvas.height - (currentState.y * scale + offsetY);
+
+			// Update position to get new coordinates
+			if (move.x !== undefined) currentState.x = move.x;
+			if (move.y !== undefined) currentState.y = move.y;
+			if (move.z !== undefined) currentState.z = move.z;
+
+			const endX = currentState.x * scale + offsetX;
+			const endY = canvas.height - (currentState.y * scale + offsetY);
+
+			// Check for extrusion (like Fluidd)
+			if (move.e !== undefined && move.e > 0) {
+				extrusionMoves++;
+				if (traveling) {
+					// Start of extrusion after travel - begin new path at start position
+					ctx.moveTo(startX, startY);
+					traveling = false;
+				}
+				// Always draw line to end position (like Fluidd's moveToSVGPath)
+				ctx.lineTo(endX, endY);
+			} else {
+				// Travel move or no extrusion
+				travelMoves++;
+				traveling = true;
 			}
-
-			lastX = x;
-			lastY = y;
 		}
 
 		ctx.stroke();
+		const elapsed = performance.now() - startTime;
+		console.log(`[drawLayerPartial] Layer ${layer.z}: ${end - actualStart + 1} moves total, ${extrusionMoves} extrusion, ${travelMoves} travel, ${elapsed.toFixed(2)}ms`);
 	}
 
-	// Rendering
+	// Render full layer
+	function drawLayerFull(layer: GCodeLayer, layerIndex: number, lastLayerIndex: number, lastMoveIndex: number, color: string) {
+		if (!ctx || !canvas || !parseResult) return;
+
+		const moves = parseResult.moves;
+		// Find the end of this layer (start of next layer or end of moves)
+		const nextLayer = layerIndex < lastLayerIndex ? { move: getLayers()[layerIndex + 1].move } : null;
+		const endIndex = nextLayer ? nextLayer.move - 1 : lastMoveIndex;
+
+		drawLayerPartial(layer, color, layer.move, endIndex);
+	}
+
+	// Main render function
 	function render() {
-		if (!ctx || !canvas || layers.length === 0) {
-			return;
-		}
+		if (!ctx || !canvas || !parseResult) return;
 
 		// Clear canvas
 		ctx.fillStyle = '#1a1a2e';
@@ -252,7 +371,7 @@
 		ctx.lineWidth = 1;
 		const gridSize = 10 * scale;
 
-		// Vertical lines (X axis)
+		// Vertical lines
 		const startX = offsetX % gridSize;
 		for (let x = startX; x < canvas.width; x += gridSize) {
 			ctx.beginPath();
@@ -261,7 +380,7 @@
 			ctx.stroke();
 		}
 
-		// Horizontal lines (Y axis) - accounting for inversion
+		// Horizontal lines
 		const startY = offsetY % gridSize;
 		for (let y = startY; y < canvas.height; y += gridSize) {
 			const canvasY = canvas.height - y;
@@ -273,55 +392,53 @@
 			}
 		}
 
-		// Render layers
-		// Use displayLayer directly for user-controlled layer navigation
-		const layerIndex = displayLayer;
+		const layers = getLayers();
+		const moves = parseResult.moves;
 
-		// Calculate current printed layer for split layer display
-		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		// Current printed layer
+		const currentPrintedLayer = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
 
-		// Printed layers (gray) - render all layers BEFORE displayed layer
-		for (let i = 0; i < layerIndex && i < layers.length; i++) {
-			drawLayerFull(layers[i], '#4a4a6a');
+		// Render recent previous layers for context (last 3) - always gray
+		const startLayer = Math.max(0, displayLayer - 3);
+		for (let i = startLayer; i < displayLayer && i < layers.length; i++) {
+			drawLayerFull(layers[i], i, layers.length - 1, moves.length - 1, '#6a6a8a');
 		}
 
-		// Displayed layer - three rendering modes based on layer state
-		if (layerIndex < layers.length && layerIndex >= 0) {
-			const layer = layers[layerIndex];
+		// Render current layer
+		if (displayLayer < layers.length) {
+			console.log('[render] Drawing current layer', displayLayer);
+			const layer = layers[displayLayer];
+			const nextLayerIndex = displayLayer + 1;
+			const nextLayer = nextLayerIndex < layers.length ? layers[nextLayerIndex] : null;
+			const layerEndIndex = nextLayer ? nextLayer.move - 1 : moves.length - 1;
 
-			// Skip if layer has no moves
-			if (layer.moves.length === 0) {
-				// Empty layer - skip rendering
-			} else if (layerIndex === currentPrintedLayerIndex) {
-				// This is the current printed layer - show split (blue + gray semi-transparent)
-				const currentLayerMoves = layer.moves;
-				const lastExecutedIndex = filePosition && filePosition > 0
-					? findLastExecutedMoveIndex(currentLayerMoves, filePosition)
-					: currentLayerMoves.length - 1;
+			if (displayLayer === currentPrintedLayer && filePosition > 0) {
+				// Current printing layer - split into two parts
+				const lastExecutedIndex = findLastExecutedMoveIndex(moves, filePosition);
 
-				// Printed part (blue)
-				if (lastExecutedIndex >= 0) {
-					drawLayerPartial(layer, '#3b82f6', 0, lastExecutedIndex);
+				if (lastExecutedIndex >= layer.move) {
+					// Printed part (blue)
+					drawLayerPartial(layer, '#3b82f6', layer.move, lastExecutedIndex);
+
+					// Remaining part (gray semi-transparent)
+					if (lastExecutedIndex + 1 <= layerEndIndex) {
+						ctx.globalAlpha = 0.5;
+						drawLayerPartial(layer, '#6a6a8a', lastExecutedIndex + 1, layerEndIndex);
+						ctx.globalAlpha = 1.0;
+					}
 				}
-
-				// Remaining part (gray semi-transparent)
-				if (lastExecutedIndex + 1 < layer.moves.length) {
-					ctx.globalAlpha = 0.5;
-					drawLayerPartial(layer, '#6a6a8a', lastExecutedIndex + 1, layer.moves.length - 1);
-					ctx.globalAlpha = 1.0;
-				}
-			} else if (layerIndex < currentPrintedLayerIndex) {
-				// Already printed layer - full blue
-				drawLayerFull(layer, '#3b82f6');
+			} else if (displayLayer < currentPrintedLayer) {
+				// Past layer (blue)
+				drawLayerFull(layer, displayLayer, layers.length - 1, moves.length - 1, '#3b82f6');
 			} else {
-				// Future layer - full gray semi-transparent
+				// Future layer (gray semi-transparent)
 				ctx.globalAlpha = 0.5;
-				drawLayerFull(layer, '#6a6a8a');
+				drawLayerFull(layer, displayLayer, layers.length - 1, moves.length - 1, '#6a6a8a');
 				ctx.globalAlpha = 1.0;
 			}
 		}
 
-		// Nozzle position (red dot)
+		// Nozzle position
 		if (nozzlePosition) {
 			const px = nozzlePosition.x * scale + offsetX;
 			const py = canvas.height - (nozzlePosition.y * scale + offsetY);
@@ -348,10 +465,7 @@
 		const newScale = Math.max(0.1, Math.min(10, scale * delta));
 		const scaleChange = newScale / scale;
 
-		// For X - normal coordinate system
 		offsetX = mouseX - (mouseX - offsetX) * scaleChange;
-		// For Y - inverted coordinate system (due to canvas.height - ...)
-		// Use inverted cursor position
 		const mouseYInverted = canvas.height - mouseY;
 		offsetY = mouseYInverted - (mouseYInverted - offsetY) * scaleChange;
 
@@ -373,7 +487,7 @@
 		const dy = e.clientY - lastY;
 
 		offsetX += dx;
-		offsetY -= dy;  // Inversion for Y due to canvas.height - (...) during rendering
+		offsetY -= dy;
 
 		lastX = e.clientX;
 		lastY = e.clientY;
@@ -385,41 +499,28 @@
 		isDragging = false;
 	}
 
-	// Navigation functions for layer control
+	// Navigation functions
 	function nextLayer() {
-		if (displayLayer < layers.length - 1) {
-			displayLayer++;
-			isUserNavigating = true;
-			render();
-		}
-	}
-
-	function prevLayer() {
-		if (displayLayer > 0) {
-			displayLayer--;
-			isUserNavigating = true;
-			render();
-		}
-	}
-
-	function goToCurrentLayer() {
-		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
-		displayLayer = currentPrintedLayerIndex;
-		isUserNavigating = false;
+		if (!parseResult || displayLayer >= getLayers().length - 1) return;
+		displayLayer++;
+		isUserNavigating = true;
 		render();
 	}
 
-	$effect(() => {
-		// Parse only when new data is loaded
-		if (gcodeLines.length > 0 && canvas && gcodeLines.length !== lastParsedLength) {
-			parseGcode(gcodeLines);
-			lastParsedLength = gcodeLines.length;
-			// Initialize displayLayer to current printed layer after parsing
-			if (!isUserNavigating) {
-				displayLayer = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
-			}
-		}
-	});
+	function prevLayer() {
+		if (displayLayer <= 0) return;
+		displayLayer--;
+		isUserNavigating = true;
+		render();
+	}
+
+	function goToCurrentLayer() {
+		if (!parseResult) return;
+		const currentPrintedLayer = Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
+		displayLayer = currentPrintedLayer;
+		isUserNavigating = false;
+		render();
+	}
 
 	// Track changes for re-rendering
 	let lastRenderedLayer = -1;
@@ -429,30 +530,36 @@
 	let lastRenderedCurrentLayer = -1;
 
 	$effect(() => {
-		const shouldRender = layers.length > 0 && ctx && canvas;
-		if (!shouldRender) return;
+		if (!parseResult || !ctx || !canvas) return;
 
-		const currentPrintedLayerIndex = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		const startTime = performance.now();
+		const currentPrintedLayer = Math.min(
+			Math.max(0, currentLayer - 1),
+			getLayers().length - 1
+		);
 		const positionKey = `${nozzlePosition?.x},${nozzlePosition?.y},${nozzlePosition?.z}`;
-		const needsRender = displayLayer !== lastRenderedLayer ||
-							layers.length !== lastRenderedLayersCount ||
-							positionKey !== lastRenderedPosition ||
-							filePosition !== lastRenderedFilePosition ||
-							currentPrintedLayerIndex !== lastRenderedCurrentLayer;
+		const needsRender =
+			displayLayer !== lastRenderedLayer ||
+			getLayers().length !== lastRenderedLayersCount ||
+			positionKey !== lastRenderedPosition ||
+			filePosition !== lastRenderedFilePosition ||
+			currentPrintedLayer !== lastRenderedCurrentLayer;
 
 		if (needsRender) {
+			console.log('[renderEffect] Triggered, displayLayer:', displayLayer, 'currentPrintedLayer:', currentPrintedLayer);
 			lastRenderedLayer = displayLayer;
-			lastRenderedLayersCount = layers.length;
+			lastRenderedLayersCount = getLayers().length;
 			lastRenderedPosition = positionKey;
 			lastRenderedFilePosition = filePosition;
-			lastRenderedCurrentLayer = currentPrintedLayerIndex;
+			lastRenderedCurrentLayer = currentPrintedLayer;
 			render();
+			console.log('[renderEffect] Completed in', (performance.now() - startTime).toFixed(2), 'ms');
 		}
 	});
 
+	// Initialize canvas context
 	$effect(() => {
 		if (canvas && !ctx) {
-			// Initialize context when canvas is available
 			ctx = canvas.getContext('2d');
 
 			// Initial size
@@ -462,8 +569,7 @@
 				if (container) {
 					canvas.width = container.clientWidth;
 					canvas.height = container.clientHeight;
-					// Recalculate scaling on size change
-					if (layers.length > 0) {
+					if (parseResult) {
 						fitToView(20);
 					}
 					render();
@@ -479,43 +585,76 @@
 </script>
 
 <div class="relative w-full h-full bg-surface-900 rounded-lg overflow-hidden">
-	<canvas
-		bind:this={canvas}
-		class="w-full h-full cursor-grab active:cursor-grabbing"
-		onwheel={handleWheel}
-		onmousedown={handleMouseDown}
-		onmousemove={handleMouseMove}
-		onmouseup={handleMouseUp}
-		onmouseleave={handleMouseUp}
-	></canvas>
+	{#if isParsing}
+		<!-- Parsing progress -->
+		<div class="absolute inset-0 flex items-center justify-center bg-surface-900/80">
+			<div class="text-center">
+				<div class="text-2xl mb-2">{$locales('viewer.parsing')}</div>
+				<div class="w-64 h-4 bg-surface-700 rounded-full overflow-hidden">
+					<div class="h-full bg-primary-500 transition-all" style="width: {parseProgress}%"></div>
+				</div>
+				<div class="text-surface-400 mt-2">{Math.round(parseProgress)}%</div>
+			</div>
+		</div>
+	{:else if parseError}
+		<!-- Parse error -->
+		<div class="absolute inset-0 flex items-center justify-center bg-surface-900/80">
+			<div class="text-center text-red-500">
+				<div class="text-2xl mb-2">{$locales('viewer.parseError')}</div>
+				<div>{parseError}</div>
+			</div>
+		</div>
+	{:else if parseResult}
+		<!-- Canvas -->
+		<canvas
+			bind:this={canvas}
+			class="w-full h-full cursor-grab active:cursor-grabbing"
+			onwheel={handleWheel}
+			onmousedown={handleMouseDown}
+			onmousemove={handleMouseMove}
+			onmouseup={handleMouseUp}
+			onmouseleave={handleMouseUp}
+		></canvas>
 
-	<!-- Controls -->
-	<div class="absolute top-4 right-4 flex flex-col gap-2">
-		<button
-			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
-			onclick={nextLayer}
-			disabled={displayLayer >= layers.length - 1}
-		>
-			+
-		</button>
-		<button
-			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
-			onclick={prevLayer}
-			disabled={displayLayer <= 0}
-		>
-			−
-		</button>
-		<button
-			class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-sm"
-			onclick={goToCurrentLayer}
-		>
-			⌂
-		</button>
-	</div>
+		<!-- Controls -->
+		<div class="absolute top-4 right-4 flex flex-col gap-2">
+			<button
+				class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+				onclick={nextLayer}
+				disabled={displayLayer >= getLayers().length - 1}
+			>
+				+
+			</button>
+			<button
+				class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+				onclick={prevLayer}
+				disabled={displayLayer <= 0}
+			>
+				−
+			</button>
+			<button
+				class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-sm"
+				onclick={goToCurrentLayer}
+			>
+				⌂
+			</button>
+		</div>
 
-	<!-- Layer info -->
-	<div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
-		{$locales('viewer.layer')}: {displayLayer + 1} / {totalLayers}
-		{displayLayer !== Math.min(Math.max(0, currentLayer - 1), layers.length - 1) ? ` (${$locales('viewer.current')}: ${currentLayer})` : ''}
-	</div>
+		<!-- Layer info -->
+		<div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
+			{$locales('viewer.layer')}: {displayLayer + 1} / {getLayers().length}
+			{displayLayer !==
+				Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1)
+				? ` (${$locales('viewer.current')}: ${currentLayer})`
+				: ''}
+		</div>
+	{:else}
+		<!-- Loading state - waiting for data -->
+		<div class="absolute inset-0 flex items-center justify-center">
+			<div class="text-surface-400 text-center">
+				<div class="text-4xl mb-2">📐</div>
+				<p>{$locales('viewer.loading')}</p>
+			</div>
+		</div>
+	{/if}
 </div>
