@@ -112,15 +112,35 @@ To configure printers, open `/admin/settings` in your browser.
 
 Caddy is used as an optional reverse proxy for HTTPS and base path support.
 
-Copy `Caddyfile.example` to `Caddyfile` and configure:
+Copy `Caddyfile.example` to `Caddyfile` and configure.
+
+The application uses a split API structure:
+- **Admin API** (`/api/admin/*`) - requires basic authentication
+- **Public API** (`/api/public/*`) - token-based authentication (no basic auth)
 
 ```caddy
 your-domain.com {
-    @allowedKlipper {
-        path_regexp ^/klipper/(view|_app|api/(status|gcode|token|config/base-path|thumbnail))
+    # Admin API - protected by basic authentication
+    @adminAPI {
+        path_regexp ^/klipper/api/admin/*
+    }
+    handle @adminAPI {
+        uri strip_prefix /klipper
+        basicauth {
+            # Replace with your actual username and hashed password
+            # Generate hashed password with: caddy hash-password --plaintext 'your-password'
+            admin $2a$14$...
+        }
+        reverse_proxy localhost:3000 {
+            header_up X-Base-Path /klipper
+        }
     }
 
-    handle @allowedKlipper {
+    # Public API + Frontend (no basic auth)
+    @publicAPI {
+        path_regexp ^/klipper/(api/public|view|_app)/
+    }
+    handle @publicAPI {
         uri strip_prefix /klipper
         reverse_proxy localhost:3000 {
             header_up X-Base-Path /klipper
@@ -135,11 +155,47 @@ your-domain.com {
 
 **Important notes:**
 - Replace `your-domain.com` with your actual domain
+- Generate hashed password with: `caddy hash-password --plaintext 'your-password'`
 - Adjust the reverse_proxy URL to match your app's address
 - The `X-Base-Path` header tells the app it's running under `/klipper` prefix
-- `thumbnail` endpoint is required for model preview images
 
-## 3. Moonraker API
+## 3. API Structure
+
+The application provides two types of API endpoints:
+
+### 3.1 Admin API (`/api/admin/*`)
+
+Requires basic authentication (configured at reverse-proxy level).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/admin/status` | GET | Printer status for admin panel |
+| `/api/admin/printers` | GET | List all printers |
+| `/api/admin/printers` | POST | Create new printer |
+| `/api/admin/printers/[id]` | GET | Get specific printer |
+| `/api/admin/printers/[id]` | PUT | Update printer |
+| `/api/admin/printers/[id]` | DELETE | Delete printer |
+| `/api/admin/printers/[id]/health` | POST | Healthcheck specific printer |
+| `/api/admin/printers/health` | POST | Healthcheck all printers |
+| `/api/admin/settings` | GET | Get application settings |
+| `/api/admin/settings` | POST | Save application settings |
+| `/api/admin/tokens` | GET | List tokens for printer |
+| `/api/admin/tokens` | POST | Create new token |
+| `/api/admin/tokens` | DELETE | Revoke token |
+| `/api/admin/config/base-path` | GET | Get base path configuration |
+
+### 3.2 Public API (`/api/public/*`)
+
+Requires valid token (passed as query parameter). No basic authentication required.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/public/status` | GET | Printer status for public viewing |
+| `/api/public/gcode/[token]` | GET | Get G-code file |
+| `/api/public/thumbnail/[token]` | GET | Get model thumbnail image |
+| `/api/public/token/[token]` | GET | Get token information |
+
+## 4. Moonraker API
 
 Endpoints used:
 
@@ -149,7 +205,7 @@ Endpoints used:
 - `GET /server/files/gcodes/{filename}/bigthumbnail` - model thumbnail
 - `WebSocket /websocket` - real-time updates
 
-## 4. Check list
+## 5. Check list
 
 - [x] Admin page
 - [x] Settings page
@@ -168,6 +224,6 @@ Endpoints used:
   - [ ] Expire link after print process finished
   - [ ] Access, based on current filename
 
-## 5. License
+## 6. License
 
 CC-BY-4.0

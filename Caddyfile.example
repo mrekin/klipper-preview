@@ -1,27 +1,39 @@
-# Caddy configuration example for Klipper Print Share
+# Caddy configuration for Klipper Print Share
 # Replace example.com with your domain and adjust paths/ports as needed
+# Generate password: caddy hash-password --plaintext 'your-password'
 
 example.com {
-	# Allowed paths for Klipper Print Share
-	@allowedKlipper {
-		path_regexp ^/klipper/(view|_app|api/(status|gcode|token|config/base-path|thumbnail))
+	# Admin API (basic auth required)
+	@apiAdmin {
+		path_regexp ^/klipper/api/admin/*
+	}
+	handle @apiAdmin {
+		uri strip_prefix /klipper
+		basicauth {
+			# Replace $2a$14$... with: caddy hash-password --plaintext 'your-password'
+			admin $2a$14$...
+		}
+		reverse_proxy http://192.168.1.115:3030 {
+			header_up X-Base-Path /klipper
+		}
 	}
 
-	handle @allowedKlipper {
+	# Public API + Frontend (no basic auth)
+	@apiPublic {
+		path_regexp ^/klipper/(api/public|view|_app)/
+	}
+	handle @apiPublic {
 		uri strip_prefix /klipper
 		reverse_proxy http://192.168.1.115:3030 {
 			header_up X-Base-Path /klipper
 		}
 	}
 
-	# Optional: redirect root to klipper path
 	handle / {
 		redir /klipper/view
 	}
 }
 
-# Notes:
-# - Replace example.com with your actual domain
-# - Adjust the reverse_proxy URL (192.168.1.115:3030) to match your app's address
-# - The X-Base-Path header tells the app it's running under /klipper prefix
-# - thumbnail endpoint is required for model preview images on view page
+# API structure:
+#   /api/admin/*  - Admin endpoints (basic auth)
+#   /api/public/* - Public endpoints (token in query)

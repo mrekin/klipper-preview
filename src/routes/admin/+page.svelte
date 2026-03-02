@@ -125,7 +125,7 @@
 
 	async function loadPrinters() {
 		try {
-			const res = await fetch(apiUrl('/api/printers'));
+			const res = await fetch(apiUrl('/api/admin/printers'));
 			if (res.ok) {
 				printers = await res.json();
 				initialized = true;
@@ -140,7 +140,7 @@
 
 		try {
 			const [tokensRes, statusRes] = await Promise.all([
-				fetch(apiUrl(`/api/tokens?printer_id=${selectedPrinterId}`)),
+				fetch(apiUrl(`/api/admin/tokens?printer_id=${selectedPrinterId}`)),
 				fetch(apiUrl(`/api/admin/status?printer_id=${selectedPrinterId}`))
 			]);
 
@@ -156,7 +156,7 @@
 		if (printerId === null) return;
 
 		try {
-			const res = await fetch(apiUrl('/api/tokens'), {
+			const res = await fetch(apiUrl('/api/admin/tokens'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -177,7 +177,7 @@
 
 	async function revokeToken(token: string) {
 		try {
-			await fetch(apiUrl('/api/tokens'), {
+			await fetch(apiUrl('/api/admin/tokens'), {
 				method: 'DELETE',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ token })

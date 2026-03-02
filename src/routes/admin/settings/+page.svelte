@@ -84,7 +84,7 @@
 	// Load printers
 	async function loadPrinters() {
 		try {
-			const res = await fetch(apiUrl('/api/printers'));
+			const res = await fetch(apiUrl('/api/admin/printers'));
 			if (res.ok) {
 				printers = await res.json();
 				// Initialize health status for new printers
@@ -103,7 +103,7 @@
 	async function checkPrinterHealth(printerId: number) {
 		healthStatus[printerId] = 'checking';
 		try {
-			const res = await fetch(apiUrl(`/api/printers/${printerId}/health`), {
+			const res = await fetch(apiUrl(`/api/admin/printers/${printerId}/health`), {
 				method: 'POST'
 			});
 
@@ -184,8 +184,8 @@
 
 		try {
 			const url = editingPrinter
-				? apiUrl(`/api/printers/${editingPrinter.id}`)
-				: apiUrl('/api/printers');
+				? apiUrl(`/api/admin/printers/${editingPrinter.id}`)
+				: apiUrl('/api/admin/printers');
 			const method = editingPrinter ? 'PUT' : 'POST';
 
 			const res = await fetch(url, {
@@ -215,7 +215,7 @@
 	async function openDeleteConfirm(printer: Printer) {
 		// Get token count
 		try {
-			const res = await fetch(apiUrl(`/api/tokens?printer_id=${printer.id}`));
+			const res = await fetch(apiUrl(`/api/admin/tokens?printer_id=${printer.id}`));
 			if (res.ok) {
 				const tokens = await res.json();
 				deletingPrinter = { ...printer, token_count: tokens.length };
@@ -234,7 +234,7 @@
 		error = '';
 
 		try {
-			const res = await fetch(apiUrl(`/api/printers/${deletingPrinter.id}?confirm=true`), {
+			const res = await fetch(apiUrl(`/api/admin/printers/${deletingPrinter.id}?confirm=true`), {
 				method: 'DELETE'
 			});
 
@@ -281,7 +281,7 @@
 		saving = true;
 		error = '';
 		try {
-			const res = await fetch(apiUrl('/api/settings'), {
+			const res = await fetch(apiUrl('/api/admin/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({

@@ -8,7 +8,7 @@ import {
 	clearPrinterError
 } from '$lib/server/printers';
 
-// GET /api/printers/:id - Get specific printer
+// GET /api/admin/printers/:id - Get specific printer
 export const GET: RequestHandler = async ({ params }) => {
 	try {
 		const id = parseInt(params.id);
@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 };
 
-// PUT /api/printers/:id - Update printer
+// PUT /api/admin/printers/:id - Update printer
 export const PUT: RequestHandler = async ({ params, request }) => {
 	try {
 		const id = parseInt(params.id);
@@ -124,7 +124,7 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 };
 
-// DELETE /api/printers/:id - Delete printer
+// DELETE /api/admin/printers/:id - Delete printer
 export const DELETE: RequestHandler = async ({ params, url }) => {
 	try {
 		const id = parseInt(params.id);

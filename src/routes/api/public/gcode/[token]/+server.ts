@@ -5,20 +5,20 @@ import { validateToken, getToken } from '$lib/server/database';
 
 export const GET: RequestHandler = async ({ params, url }) => {
 	const token = params.token;
-	
+
 	// Валидация токена
 	if (!validateToken(token)) {
 		return json({ error: 'Invalid or expired token' }, { status: 403 });
 	}
-	
+
 	// Получаем имя файла из query или из токена
 	const tokenData = getToken(token);
 	const filename = url.searchParams.get('file') || tokenData?.filename;
-	
+
 	if (!filename) {
 		return json({ error: 'No file specified' }, { status: 400 });
 	}
-	
+
 	try {
 		const gcode = await fetchGcode(filename, tokenData?.printer_id || undefined);
 

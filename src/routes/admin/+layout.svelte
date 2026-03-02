@@ -35,7 +35,7 @@
 
 	async function loadPrinters() {
 		try {
-			const res = await fetch('/api/printers');
+			const res = await fetch('/api/admin/printers');
 			if (res.ok) {
 				printers = await res.json();
 				loading = false;
@@ -66,7 +66,7 @@
 		saving = true;
 		error = '';
 		try {
-			const url = editingPrinter ? `/api/printers/${editingPrinter.id}` : '/api/printers';
+			const url = editingPrinter ? `/api/admin/printers/${editingPrinter.id}` : '/api/admin/printers';
 			const method = editingPrinter ? 'PUT' : 'POST';
 
 			const res = await fetch(url, {

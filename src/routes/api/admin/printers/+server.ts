@@ -8,7 +8,7 @@ import {
 	DEFAULT_THUMBNAIL_SIZES
 } from '$lib/server/printers';
 
-// GET /api/printers - Get all printers
+// GET /api/admin/printers - Get all printers
 export const GET: RequestHandler = async () => {
 	try {
 		const printers = getAllPrinters();
@@ -19,7 +19,7 @@ export const GET: RequestHandler = async () => {
 	}
 };
 
-// POST /api/printers - Create new printer
+// POST /api/admin/printers - Create new printer
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const body = await request.json();

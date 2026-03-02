@@ -57,7 +57,7 @@
 			return '';
 		}
 		const filename = encodeURIComponent(status.filename);
-		return apiUrl(`/api/thumbnail/${token}?filename=${filename}`);
+		return apiUrl(`/api/public/thumbnail/${token}?filename=${filename}`);
 	});
 
 	// Handle thumbnail error
@@ -79,7 +79,7 @@
 		}
 
 		try {
-			const res = await fetch(apiUrl(`/api/status?token=${token}`));
+			const res = await fetch(apiUrl(`/api/public/status?token=${token}`));
 
 			if (!res.ok) {
 				if (res.status === 403) {
@@ -102,7 +102,7 @@
 		}
 
 		try {
-			const res = await fetch(apiUrl(`/api/gcode/${token}?file=${encodeURIComponent(filename)}`));
+			const res = await fetch(apiUrl(`/api/public/gcode/${token}?file=${encodeURIComponent(filename)}`));
 
 			if (res.ok) {
 				const data = await res.json();
@@ -152,7 +152,7 @@
 
 			// Загружаем информацию о токене
 			try {
-				const res = await fetch(apiUrl(`/api/token/${token}?noCache=true`));
+				const res = await fetch(apiUrl(`/api/public/token/${token}?noCache=true`));
 				if (res.ok) {
 					tokenData = await res.json();
 				}

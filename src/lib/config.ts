@@ -85,7 +85,7 @@ export async function getBasePath(): Promise<string> {
 		// Client-side: fetch from API or use cached value
 		if (!window.__BASE_PATH__) {
 			try {
-				const res = await fetch('/api/config/base-path');
+				const res = await fetch('/api/admin/config/base-path');
 				if (res.ok) {
 					const data = await res.json();
 					window.__BASE_PATH__ = data.basePath || '';

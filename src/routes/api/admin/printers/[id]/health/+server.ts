@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getPrinter, setPrinterError, clearPrinterError } from '$lib/server/printers';
 
-// POST /api/printers/:id/health - Health check for specific printer
+// POST /api/admin/printers/:id/health - Health check for specific printer
 export const POST: RequestHandler = async ({ params }) => {
 	try {
 		const id = parseInt(params.id);

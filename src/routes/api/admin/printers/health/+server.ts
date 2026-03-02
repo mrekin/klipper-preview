@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAllPrinters, setPrinterError, clearPrinterError } from '$lib/server/printers';
 
-// POST /api/printers/health - Health check for all printers
+// POST /api/admin/printers/health - Health check for all printers
 export const POST: RequestHandler = async () => {
 	try {
 		const printers = getAllPrinters();
