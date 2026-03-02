@@ -85,7 +85,8 @@
 		"defaultPageAdmin": "Admin panel",
 		"defaultPageView": "View page",
 		"defaultPageHelp": "Select the page that users will see when they open the root URL (/)",
-		"defaultPageViewWarning": "⚠️ Warning: The view page requires a valid token. Users without a token will see an error."
+		"defaultPageViewWarning": "⚠️ Warning: The view page requires a valid token. Users without a token will see an error.",
+		"saveAll": "Save All Settings"
 	},
 	"printermodal": {
 		"addPrinter": "Add printer",

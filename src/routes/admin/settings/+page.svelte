@@ -76,6 +76,11 @@
 		}
 	}
 
+	// Check if there are any validation errors
+	function hasErrors(): boolean {
+		return urlValidationMessage !== '';
+	}
+
 	// Load printers
 	async function loadPrinters() {
 		try {
@@ -262,9 +267,14 @@
 		validateUrl(publicUrl);
 	});
 
+	// Unified save function for all settings
 	async function save() {
-		if (urlValidationMessage) {
+		if (hasErrors()) {
 			error = $locales('settings.fixErrors');
+			// Scroll to first error field
+			const firstError = document.querySelector('[aria-invalid="true"]') as HTMLElement;
+			firstError?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			firstError?.focus();
 			return;
 		}
 
@@ -274,7 +284,12 @@
 			const res = await fetch(apiUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ moonrakerUrl, publicUrl, language: selectedLanguage, defaultPage })
+				body: JSON.stringify({
+					moonrakerUrl,
+					publicUrl,
+					language: selectedLanguage,
+					defaultPage
+				})
 			});
 
 			if (!res.ok) {
@@ -322,205 +337,206 @@
 </svelte:head>
 
 <div class="p-6">
-	<div class="max-w-4xl mx-auto">
-		<a href="/admin" class="text-primary-500 hover:underline mb-6 inline-block">
-			{$locales('settings.backToPanel')}
-		</a>
+	<div class="max-w-6xl mx-auto">
+		<!-- Header with back link and save button -->
+		<div class="flex items-center justify-between mb-6">
+			<div class="flex items-center gap-4">
+				<div>
+					<a href="/admin" class="text-primary-500 hover:underline inline-block">
+						{$locales('settings.backToPanel')}
+					</a>
+					<h1 class="text-2xl font-bold mt-2">
+						{$locales('settings.title')}
+						{#if saved}
+							<span class="text-green-500 text-lg ml-2">✓ {$locales('settings.settingsSaved')}</span>
+						{/if}
+					</h1>
+				</div>
+			</div>
+			<button
+				class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+				onclick={save}
+				disabled={loading || saving || hasErrors()}
+			>
+				{saving ? $locales('settings.saving') : $locales('settings.saveAll')}
+			</button>
+		</div>
 
-		<h1 class="text-2xl font-bold mb-6">{$locales('settings.title')}</h1>
-
+		<!-- Error message -->
 		{#if error}
-			<div class="bg-red-500/10 text-red-500 px-4 py-3 rounded-lg mb-6">
+			<div class="bg-red-500/10 text-red-500 px-4 py-3 rounded-lg mb-4">
 				{error}
 			</div>
 		{/if}
 
-		{#if saved}
-			<div class="bg-green-500/10 text-green-500 px-4 py-3 rounded-lg mb-6">
-				✓ {$locales('settings.settingsSaved')}
-			</div>
-		{/if}
+		<!-- Grid layout for settings -->
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+			<!-- Printers: full width -->
+			<div class="lg:col-span-2 bg-surface-100-900 rounded-xl p-4 border border-surface-200-800">
+				<div class="flex items-center justify-between mb-3">
+					<h2 class="text-base font-semibold">{$locales('settings.printers')}</h2>
+					<button
+						class="px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm"
+						onclick={openCreatePrinterModal}
+					>
+						{$locales('settings.addPrinter')}
+					</button>
+				</div>
 
-		<!-- Printers Section -->
-		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
-			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold">{$locales('settings.printers')}</h2>
-				<button
-					class="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-					onclick={openCreatePrinterModal}
-				>
-					{$locales('settings.addPrinter')}
-				</button>
-			</div>
-
-			{#if printers.length === 0}
-				<p class="text-surface-500 text-center py-8">{$locales('settings.noPrinters')}</p>
-			{:else}
-				<div class="space-y-3">
-					{#each printers as printer}
-						<div class="flex items-center justify-between p-4 bg-surface-50-950 rounded-lg border border-surface-200-800">
-							<div class="flex-1">
-								<div class="flex items-center gap-2">
-									<span class="font-medium">{printer.name}</span>
-									{#if printer.is_default}
-										<span class="text-xs px-2 py-1 bg-primary-500/10 text-primary-500 rounded"
-											>{$locales('settings.byDefault')}</span
-										>
+				{#if printers.length === 0}
+					<p class="text-surface-500 text-center py-6">{$locales('settings.noPrinters')}</p>
+				{:else}
+					<div class="space-y-2">
+						{#each printers as printer}
+							<div
+								class="flex items-center justify-between p-3 bg-surface-50-950 rounded-lg border border-surface-200-800"
+							>
+								<div class="flex-1">
+									<div class="flex items-center gap-2">
+										<span class="font-medium">{printer.name}</span>
+										{#if printer.is_default}
+											<span class="text-xs px-2 py-1 bg-primary-500/10 text-primary-500 rounded"
+												>{$locales('settings.byDefault')}</span
+											>
+										{/if}
+									</div>
+									<p class="text-sm text-surface-500 mt-1">{printer.moonraker_url}</p>
+									{#if printer.last_error}
+										<p class="text-xs text-red-500 mt-1">{printer.last_error}</p>
 									{/if}
 								</div>
-								<p class="text-sm text-surface-500 mt-1">{printer.moonraker_url}</p>
-								{#if printer.last_error}
-									<p class="text-xs text-red-500 mt-1">{printer.last_error}</p>
-								{/if}
+								<div class="flex items-center gap-2">
+									<button
+										class="px-3 py-1 text-sm bg-surface-200-800 rounded transition-colors {getHealthStatusClass(
+											printer.id
+										)} disabled:opacity-50"
+										onclick={() => checkPrinterHealth(printer.id)}
+										disabled={healthStatus[printer.id] === 'checking'}
+										title={$locales('settings.checkConnection')}
+									>
+										{getHealthStatusIcon(printer.id)}
+									</button>
+									<button
+										class="px-3 py-1 text-sm bg-surface-200-800 hover:bg-surface-300-700 rounded transition-colors"
+										onclick={() => openEditPrinterModal(printer)}
+									>
+										{$locales('settings.edit')}
+									</button>
+									<button
+										class="px-3 py-1 text-sm bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded transition-colors"
+										onclick={() => openDeleteConfirm(printer)}
+									>
+										{$locales('settings.delete')}
+									</button>
+								</div>
 							</div>
-							<div class="flex items-center gap-2">
-								<button
-									class="px-3 py-1 text-sm bg-surface-200-800 rounded transition-colors {getHealthStatusClass(
-										printer.id
-									)} disabled:opacity-50"
-									onclick={() => checkPrinterHealth(printer.id)}
-									disabled={healthStatus[printer.id] === 'checking'}
-									title={$locales('settings.checkConnection')}
-								>
-									{getHealthStatusIcon(printer.id)}
-								</button>
-								<button
-									class="px-3 py-1 text-sm bg-surface-200-800 hover:bg-surface-300-700 rounded transition-colors"
-									onclick={() => openEditPrinterModal(printer)}
-								>
-									{$locales('settings.edit')}
-								</button>
-								<button
-									class="px-3 py-1 text-sm bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded transition-colors"
-									onclick={() => openDeleteConfirm(printer)}
-								>
-									{$locales('settings.delete')}
-								</button>
-							</div>
-						</div>
-					{/each}
-				</div>
-			{/if}
-		</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 
-		<!-- Public URL Settings -->
-		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
-			<h2 class="text-lg font-semibold mb-4">{$locales('settings.publicLinks')}</h2>
+			<!-- Public URL -->
+			<div class="bg-surface-100-900 rounded-xl p-4 border border-surface-200-800">
+				<h2 class="text-base font-semibold mb-3">{$locales('settings.publicLinks')}</h2>
 
-			<div class="space-y-4">
-				<div>
-					<label for="public-url" class="block text-sm text-surface-500 mb-2"
-						>{$locales('settings.publicUrl')}</label
-					>
-					<input
-						id="public-url"
-						type="text"
-						bind:value={publicUrl}
-						disabled={loading || saving}
-						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-						placeholder={$locales('settings.publicUrlPlaceholder')}
-					/>
-					<p class="text-sm text-surface-500 mt-2">
-						{$locales('settings.publicUrlHelp')}
-					</p>
-					<p class="text-sm text-surface-500 mt-1">
-						{$locales('settings.publicUrlEmptyHelp')}
-					</p>
-					<p class="text-xs text-surface-600 mt-2">
-						{$locales('settings.publicUrlExamples')}
-					</p>
+				<div class="space-y-2">
+					<div class="flex items-center gap-3">
+						<label
+							for="public-url"
+							class="text-sm text-surface-500 min-w-[100px] flex-shrink-0"
+							title="{$locales('settings.publicUrlHelp')} {$locales('settings.publicUrlEmptyHelp')}\n\n{$locales('settings.publicUrlExamples')}"
+						>
+							{$locales('settings.publicUrl')}
+							<span class="text-surface-400 ml-1">ⓘ</span>
+						</label>
+						<input
+							id="public-url"
+							type="text"
+							bind:value={publicUrl}
+							aria-invalid={!!urlValidationMessage}
+							aria-describedby={urlValidationMessage ? 'public-url-error' : undefined}
+							disabled={loading || saving}
+							class="flex-1 px-3 py-1.5 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50 text-sm"
+							placeholder={$locales('settings.publicUrlPlaceholder')}
+						/>
+					</div>
 					{#if urlValidationMessage}
-						<p class="text-sm text-orange-500 mt-2">
+						<p id="public-url-error" class="text-sm text-orange-500 ml-[115px]" role="alert">
 							{urlValidationMessage}
 						</p>
 					{/if}
 				</div>
 			</div>
 
-			<div class="mt-6 flex justify-end">
-				<button
-					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={save}
-					disabled={loading || saving || urlValidationMessage !== ''}
-				>
-					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
-				</button>
-			</div>
-		</div>
+			<!-- Interface -->
+			<div class="bg-surface-100-900 rounded-xl p-4 border border-surface-200-800">
+				<h2 class="text-base font-semibold mb-3">{$locales('settings.interface')}</h2>
 
-		<!-- Interface Settings -->
-		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
-			<h2 class="text-lg font-semibold mb-4">{$locales('settings.interface')}</h2>
-
-			<div class="space-y-4">
-				<div>
-					<label for="default-page-select" class="block text-sm text-surface-500 mb-2">
-						{$locales('settings.defaultPage')}
-					</label>
-					<select
-						id="default-page-select"
-						bind:value={defaultPage}
-						disabled={loading || saving}
-						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-					>
-						<option value="/admin">{$locales('settings.defaultPageAdmin')}</option>
-						<option value="/view">{$locales('settings.defaultPageView')}</option>
-					</select>
-					<p class="text-sm text-surface-500 mt-2">
-						{$locales('settings.defaultPageHelp')}
-					</p>
+				<div class="space-y-2">
+					<div class="flex items-center gap-3">
+						<label
+							for="default-page-select"
+							class="text-sm text-surface-500 min-w-[100px] flex-shrink-0"
+							title="{$locales('settings.defaultPageHelp')}"
+						>
+							{$locales('settings.defaultPage')}
+							<span class="text-surface-400 ml-1">ⓘ</span>
+						</label>
+						<select
+							id="default-page-select"
+							bind:value={defaultPage}
+							disabled={loading || saving}
+							class="flex-1 px-3 py-1.5 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50 text-sm"
+						>
+							<option value="/admin">{$locales('settings.defaultPageAdmin')}</option>
+							<option value="/view">{$locales('settings.defaultPageView')}</option>
+						</select>
+					</div>
 					{#if defaultPage === '/view'}
-						<p class="text-sm text-orange-500 mt-2">
+						<p class="text-sm text-orange-500 ml-[115px]">
 							{$locales('settings.defaultPageViewWarning')}
 						</p>
 					{/if}
 				</div>
 			</div>
 
-			<div class="mt-6 flex justify-end">
-				<button
-					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={save}
-					disabled={loading || saving}
-				>
-					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
-				</button>
+			<!-- Language -->
+			<div class="bg-surface-100-900 rounded-xl p-4 border border-surface-200-800">
+				<h2 class="text-base font-semibold mb-3">{$locales('settings.language')}</h2>
+
+				<div class="space-y-2">
+					<div class="flex items-center gap-3">
+						<label
+							for="language-select"
+							class="text-sm text-surface-500 min-w-[100px] flex-shrink-0"
+							title="{$locales('settings.languageHint')}"
+						>
+							{$locales('settings.interfaceLanguage')}
+							<span class="text-surface-400 ml-1">ⓘ</span>
+						</label>
+						<select
+							id="language-select"
+							bind:value={selectedLanguage}
+							disabled={loading || saving}
+							class="flex-1 px-3 py-1.5 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50 text-sm"
+						>
+							<option value="en">English</option>
+							<option value="ru">Русский</option>
+						</select>
+					</div>
+				</div>
 			</div>
 		</div>
 
-		<!-- Language Settings -->
-		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
-			<h2 class="text-lg font-semibold mb-4">{$locales('settings.language')}</h2>
-
-			<div class="space-y-4">
-				<div>
-					<label for="language-select" class="block text-sm text-surface-500 mb-2">
-						{$locales('settings.interfaceLanguage')}
-					</label>
-					<select
-						id="language-select"
-						bind:value={selectedLanguage}
-						disabled={loading || saving}
-						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
-					>
-						<option value="en">English</option>
-						<option value="ru">Русский</option>
-					</select>
-					<p class="text-sm text-surface-500 mt-2">
-						{$locales('settings.languageHint')}
-					</p>
-				</div>
-			</div>
-
-			<div class="mt-6 flex justify-end">
-				<button
-					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={save}
-					disabled={loading || saving}
-				>
-					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
-				</button>
-			</div>
+		<!-- Bottom save button -->
+		<div class="flex justify-end">
+			<button
+				class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+				onclick={save}
+				disabled={loading || saving || hasErrors()}
+			>
+				{saving ? $locales('settings.saving') : $locales('settings.saveAll')}
+			</button>
 		</div>
 	</div>
 </div>
