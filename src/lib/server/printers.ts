@@ -1,4 +1,4 @@
-import { db } from './tokens';
+import { db } from './database';
 
 // Cache for printer settings (5 min TTL)
 const printerCache = new Map<number, { printer: Printer; timestamp: number }>();

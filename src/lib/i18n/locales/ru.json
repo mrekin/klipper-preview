@@ -79,7 +79,13 @@
 		"savePrinterError": "Ошибка сохранения принтера",
 		"deletePrinterError": "Ошибка удаления принтера",
 		"saveSettingsError": "Ошибка сохранения настроек",
-		"urlValidationError": "URL должен начинаться с http:// или https://"
+		"urlValidationError": "URL должен начинаться с http:// или https://",
+		"interface": "Интерфейс",
+		"defaultPage": "Страница по умолчанию",
+		"defaultPageAdmin": "Админ-панель",
+		"defaultPageView": "Страница просмотра",
+		"defaultPageHelp": "Выберите страницу, которую увидят пользователи при открытии корневого URL (/)",
+		"defaultPageViewWarning": "⚠️ Внимание: Страница просмотра требует действительный токен. Пользователи без токена увидят ошибку."
 	},
 	"printermodal": {
 		"addPrinter": "Добавить принтер",

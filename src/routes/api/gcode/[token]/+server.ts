@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { fetchGcode } from '$lib/server/moonraker';
-import { validateToken, getToken } from '$lib/server/tokens';
+import { validateToken, getToken } from '$lib/server/database';
 
 export const GET: RequestHandler = async ({ params, url }) => {
 	const token = params.token;

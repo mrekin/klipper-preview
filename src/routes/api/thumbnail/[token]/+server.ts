@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { validateToken, getToken } from '$lib/server/tokens';
+import { validateToken, getToken } from '$lib/server/database';
 import { getMoonrakerUrl } from '$lib/server/moonraker';
 import { getPrinterThumbnailSizes } from '$lib/server/printers';
 

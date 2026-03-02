@@ -26,6 +26,7 @@
 	let moonrakerUrl = $state(data.moonrakerUrl || '');
 	let publicUrl = $state(data.publicUrl || '');
 	let selectedLanguage = $state(data.language || 'en');
+	let defaultPage = $state(data.defaultPage || '/admin');
 	let printers = $state<Printer[]>([]);
 	let showPrinterModal = $state(false);
 	let editingPrinter = $state<Printer | null>(null);
@@ -273,7 +274,7 @@
 			const res = await fetch(apiUrl('/api/settings'), {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ moonrakerUrl, publicUrl, language: selectedLanguage })
+				body: JSON.stringify({ moonrakerUrl, publicUrl, language: selectedLanguage, defaultPage })
 			});
 
 			if (!res.ok) {
@@ -441,6 +442,46 @@
 					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 					onclick={save}
 					disabled={loading || saving || urlValidationMessage !== ''}
+				>
+					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
+				</button>
+			</div>
+		</div>
+
+		<!-- Interface Settings -->
+		<div class="bg-surface-100-900 rounded-xl p-6 border border-surface-200-800 mb-6">
+			<h2 class="text-lg font-semibold mb-4">{$locales('settings.interface')}</h2>
+
+			<div class="space-y-4">
+				<div>
+					<label for="default-page-select" class="block text-sm text-surface-500 mb-2">
+						{$locales('settings.defaultPage')}
+					</label>
+					<select
+						id="default-page-select"
+						bind:value={defaultPage}
+						disabled={loading || saving}
+						class="w-full px-4 py-2 rounded-lg border border-surface-300-700 bg-surface-50-950 disabled:opacity-50"
+					>
+						<option value="/admin">{$locales('settings.defaultPageAdmin')}</option>
+						<option value="/view">{$locales('settings.defaultPageView')}</option>
+					</select>
+					<p class="text-sm text-surface-500 mt-2">
+						{$locales('settings.defaultPageHelp')}
+					</p>
+					{#if defaultPage === '/view'}
+						<p class="text-sm text-orange-500 mt-2">
+							{$locales('settings.defaultPageViewWarning')}
+						</p>
+					{/if}
+				</div>
+			</div>
+
+			<div class="mt-6 flex justify-end">
+				<button
+					class="px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					onclick={save}
+					disabled={loading || saving}
 				>
 					{saving ? $locales('settings.saving') : $locales('settings.saveSettings')}
 				</button>

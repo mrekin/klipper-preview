@@ -1,5 +1,5 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { validateToken, getPublicUrlSetting } from '$lib/server/tokens';
+import { validateToken, getPublicUrlSetting } from '$lib/server/database';
 import { setServerBasePath, setPublicUrl } from '$lib/config';
 
 export const handle: Handle = async ({ event, resolve }) => {

@@ -141,7 +141,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			}
 
 			// Get token count for this printer
-			const { getAllTokens } = await import('$lib/server/tokens');
+			const { getAllTokens } = await import('$lib/server/database');
 			const printerTokens = getAllTokens(id);
 
 			return json({

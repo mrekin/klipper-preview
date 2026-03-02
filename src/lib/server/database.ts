@@ -134,6 +134,11 @@ const PUBLIC_URL_KEY = 'public_url';
 const LANGUAGE_KEY = 'language';
 const DEFAULT_LANGUAGE = 'en';
 
+// Default page settings
+const DEFAULT_PAGE_KEY = 'default_page';
+const DEFAULT_DEFAULT_PAGE = '/admin';
+const VALID_DEFAULT_PAGES = ['/admin', '/view'] as const;
+
 // Get setting value
 export function getSetting(key: string): string | null {
 	const stmt = db.prepare('SELECT value FROM settings WHERE key = ?');
@@ -180,6 +185,20 @@ export function setLanguageSetting(lang: string): void {
 		throw new Error(`Invalid language: ${lang}`);
 	}
 	setSetting(LANGUAGE_KEY, lang);
+}
+
+// Get default page
+export function getDefaultPageSetting(): string {
+	return getSetting(DEFAULT_PAGE_KEY) || DEFAULT_DEFAULT_PAGE;
+}
+
+// Save default page
+export function setDefaultPageSetting(page: string): void {
+	// Validation
+	if (!VALID_DEFAULT_PAGES.includes(page as any)) {
+		throw new Error(`Invalid default page: ${page}. Must be one of: ${VALID_DEFAULT_PAGES.join(', ')}`);
+	}
+	setSetting(DEFAULT_PAGE_KEY, page);
 }
 
 export interface Token {

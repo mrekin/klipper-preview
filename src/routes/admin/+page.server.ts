@@ -1,5 +1,5 @@
 import type { ServerLoad } from '@sveltejs/kit';
-import { getAllTokens } from '$lib/server/tokens';
+import { getAllTokens } from '$lib/server/database';
 import { fetchPrinterStatus } from '$lib/server/moonraker';
 
 export const load: ServerLoad = async ({ url }) => {

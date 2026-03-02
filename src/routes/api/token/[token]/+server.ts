@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getToken, validateToken } from '$lib/server/tokens';
+import { getToken, validateToken } from '$lib/server/database';
 
 export const GET: RequestHandler = async ({ params, url }) => {
 	const token = params.token;

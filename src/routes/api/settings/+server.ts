@@ -6,15 +6,18 @@ import {
 	getPublicUrlSetting,
 	setPublicUrlSetting,
 	getLanguageSetting,
-	setLanguageSetting
-} from '$lib/server/tokens';
+	setLanguageSetting,
+	getDefaultPageSetting,
+	setDefaultPageSetting
+} from '$lib/server/database';
 
 // Get settings
 export const GET: RequestHandler = async () => {
 	const moonrakerUrl = getMoonrakerUrlSetting();
 	const publicUrl = getPublicUrlSetting();
 	const language = getLanguageSetting();
-	return json({ moonrakerUrl, publicUrl, language });
+	const defaultPage = getDefaultPageSetting();
+	return json({ moonrakerUrl, publicUrl, language, defaultPage });
 };
 
 // Validate public URL format
@@ -31,7 +34,7 @@ function isValidPublicUrl(url: string): boolean {
 // Save settings
 export const POST: RequestHandler = async ({ request }) => {
 	const body = await request.json();
-	const { moonrakerUrl, publicUrl, language } = body;
+	const { moonrakerUrl, publicUrl, language, defaultPage } = body;
 
 	if (moonrakerUrl && typeof moonrakerUrl === 'string') {
 		setMoonrakerUrlSetting(moonrakerUrl);
@@ -54,5 +57,13 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 	}
 
-	return json({ success: true, moonrakerUrl, publicUrl, language });
+	if (defaultPage && typeof defaultPage === 'string') {
+		try {
+			setDefaultPageSetting(defaultPage);
+		} catch (e: any) {
+			return json({ error: e.message }, { status: 400 });
+		}
+	}
+
+	return json({ success: true, moonrakerUrl, publicUrl, language, defaultPage });
 };

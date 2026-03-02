@@ -79,7 +79,13 @@
 		"savePrinterError": "Error saving printer",
 		"deletePrinterError": "Error deleting printer",
 		"saveSettingsError": "Error saving settings",
-		"urlValidationError": "URL must start with http:// or https://"
+		"urlValidationError": "URL must start with http:// or https://",
+		"interface": "Interface",
+		"defaultPage": "Default page",
+		"defaultPageAdmin": "Admin panel",
+		"defaultPageView": "View page",
+		"defaultPageHelp": "Select the page that users will see when they open the root URL (/)",
+		"defaultPageViewWarning": "⚠️ Warning: The view page requires a valid token. Users without a token will see an error."
 	},
 	"printermodal": {
 		"addPrinter": "Add printer",
