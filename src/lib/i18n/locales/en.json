@@ -44,6 +44,7 @@
 		"comment": "Comment",
 		"validUntil": "Valid until:",
 		"remaining": "Remaining:",
+		"open": "Open",
 		"copy": "Copy",
 		"revoke": "Revoke",
 		"validationMin": "Minimum: 1 minute",

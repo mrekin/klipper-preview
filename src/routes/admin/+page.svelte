@@ -207,6 +207,11 @@
 		}
 	}
 
+	function openLink(token: string) {
+		const url = publicUrl(`/view?token=${token}`);
+		window.open(url, '_blank');
+	}
+
 	function fallbackCopy(text: string) {
 		const textarea = document.createElement('textarea');
 		textarea.value = text;
@@ -489,6 +494,12 @@
 											</div>
 										</div>
 										<div class="flex gap-2">
+											<button
+												class="px-3 py-1 text-sm bg-green-500/10 text-green-500 rounded hover:bg-green-500/20 transition-colors"
+												onclick={() => openLink(t.token)}
+											>
+												{$_('admin.open')}
+											</button>
 											<button
 												class="px-3 py-1 text-sm bg-primary-500/10 text-primary-500 rounded hover:bg-primary-500/20 transition-colors"
 												onclick={() => copyLink(t.token)}
