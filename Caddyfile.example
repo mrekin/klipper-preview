@@ -3,31 +3,22 @@
 # Generate password: caddy hash-password --plaintext 'your-password'
 
 example.com {
-	# Admin API (basic auth required)
-	@apiAdmin {
-		path_regexp ^/klipper/api/admin/*
+	# Public endpoints (no basic auth)
+	@public {
+		path /klipper/favicon.ico
+		path /klipper/favicon.svg
+		path /klipper/favicon-*.png
+		path /klipper/api/public/*
+		path /klipper/view*
+		path /klipper/_app/*
 	}
-	handle @apiAdmin {
+	handle @public {
 		uri strip_prefix /klipper
-		basicauth {
-			# Replace $2a$14$... with: caddy hash-password --plaintext 'your-password'
-			admin $2a$14$...
-		}
 		reverse_proxy http://192.168.1.115:3030 {
 			header_up X-Base-Path /klipper
 		}
 	}
 
-	# Public API + Frontend (no basic auth)
-	@apiPublic {
-		path_regexp ^/klipper/(api/public|view|_app)/
-	}
-	handle @apiPublic {
-		uri strip_prefix /klipper
-		reverse_proxy http://192.168.1.115:3030 {
-			header_up X-Base-Path /klipper
-		}
-	}
 
 	handle / {
 		redir /klipper/view
