@@ -33,6 +33,7 @@ data/
 # local
 local-*
 .claude
+CLAUDE.md
 .z-ai-config
 dev.log
 test

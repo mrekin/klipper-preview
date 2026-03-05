@@ -20,7 +20,10 @@
 		"current": "current",
 		"parsing": "Parsing G-code...",
 		"parseError": "Parse error",
-		"loading": "Loading..."
+		"loading": "Loading...",
+		"followingMode": "Following print - auto switches to current layer",
+		"manualMode": "Manual navigation - click to return to current layer",
+		"goToCurrentLayer": "Go to current layer"
 	},
 	"admin": {
 		"title": "Admin Panel",

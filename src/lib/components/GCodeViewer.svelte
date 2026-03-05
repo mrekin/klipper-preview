@@ -8,10 +8,11 @@
 		GCodeMoveType,
 		WorkerOutputMessage
 	} from '$lib/types';
+	import { findLastExecutedMoveIndex, findLayerByFilePosition, getToolHeadPosition } from '$lib/utils/gcode';
 
 	interface Props {
 		gcodeData: string; // Full G-code text
-		currentLayer: number;
+		currentLayer: number; // ⚠️ WARNING: Only for UI display! Don't use for preview layer detection!
 		totalLayers: number;
 		nozzlePosition: { x: number; y: number; z: number };
 		filePosition: number;
@@ -44,6 +45,14 @@
 	// Display layer tracking
 	let displayLayer = $state(0);
 	let isUserNavigating = $state(false);
+
+	// Current printed layer (computed via filePosition for accuracy)
+	// IMPORTANT: Uses findLayerByFilePosition() instead of currentLayer prop for accurate preview
+	let currentPrintedLayer = $derived.by(() =>
+		parseResult && filePosition > 0
+			? findLayerByFilePosition(getLayers(), filePosition)
+			: Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1)
+	);
 
 	// Computed layers (computed once when parseResult changes)
 	let computedLayers: GCodeLayer[] = $state([]);
@@ -206,8 +215,12 @@
 		fitToView(20);
 
 		// Initialize displayLayer to current printed layer
+		// IMPORTANT: Use filePosition for accurate layer detection instead of currentLayer prop
+		// currentLayer comes from Moonraker's print_stats.info which is unreliable for preview
 		if (!isUserNavigating) {
-			displayLayer = Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
+			displayLayer = filePosition > 0
+				? findLayerByFilePosition(getLayers(), filePosition)
+				: Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
 		}
 
 		render();
@@ -235,48 +248,6 @@
 		}
 	}
 
-	// Binary search to find last executed move on layer based on filePosition
-	function findLastExecutedMoveIndex(moves: GCodeMoveType[], currentFilePosition: number): number {
-		if (moves.length === 0) return -1;
-
-		// Protect against overflow
-		const maxFilePosition = moves[moves.length - 1].filePosition;
-		const effectivePosition = Math.min(currentFilePosition, maxFilePosition);
-
-		let left = 0;
-		let right = moves.length - 1;
-		let result = -1;
-
-		while (left <= right) {
-			const mid = Math.floor((left + right) / 2);
-
-			if (moves[mid].filePosition <= effectivePosition) {
-				result = mid;
-				left = mid + 1;
-			} else {
-				right = mid - 1;
-			}
-		}
-
-		return result;
-	}
-
-	// Get toolhead position before a given move index (like Fluidd's getToolHeadPosition)
-	function getToolHeadPosition(moveIndex: number) {
-		const output = { x: 0, y: 0, z: 0 };
-		const moves = parseResult?.moves ?? [];
-
-		// Look back up to 3 moves to find x, y, z
-		for (let i = moveIndex, count = 0; i >= 0 && count < 3; i--) {
-			const move = moves[i];
-			if (move?.x !== undefined && output.x === 0) { output.x = move.x; count++; }
-			if (move?.y !== undefined && output.y === 0) { output.y = move.y; count++; }
-			if (move?.z !== undefined && output.z === 0) { output.z = move.z; count++; }
-		}
-
-		return output;
-	}
-
 	// Render partial layer
 	function drawLayerPartial(
 		layer: GCodeLayer,
@@ -295,7 +266,7 @@
 		ctx.beginPath();
 
 		// Initialize toolhead position from previous moves (like Fluidd)
-		const startPos = getToolHeadPosition(Math.max(0, startIndex - 1));
+		const startPos = getToolHeadPosition(moves, Math.max(0, startIndex - 1));
 		let currentState = { ...startPos };
 
 		let lastX: number | null = null;
@@ -395,8 +366,11 @@
 		const layers = getLayers();
 		const moves = parseResult.moves;
 
-		// Current printed layer
-		const currentPrintedLayer = Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+		// IMPORTANT: Use filePosition for accurate layer detection instead of currentLayer prop
+		// currentLayer comes from Moonraker's print_stats.info which is unreliable for preview
+		const currentPrintedLayer = filePosition > 0
+			? findLayerByFilePosition(layers, filePosition)
+			: Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
 
 		// Render recent previous layers for context (last 3) - always gray
 		const startLayer = Math.max(0, displayLayer - 3);
@@ -516,7 +490,11 @@
 
 	function goToCurrentLayer() {
 		if (!parseResult) return;
-		const currentPrintedLayer = Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
+		// IMPORTANT: Use filePosition for accurate layer detection instead of currentLayer prop
+		// currentLayer comes from Moonraker's print_stats.info which is unreliable for preview
+		const currentPrintedLayer = filePosition > 0
+			? findLayerByFilePosition(getLayers(), filePosition)
+			: Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
 		displayLayer = currentPrintedLayer;
 		isUserNavigating = false;
 		render();
@@ -533,10 +511,11 @@
 		if (!parseResult || !ctx || !canvas) return;
 
 		const startTime = performance.now();
-		const currentPrintedLayer = Math.min(
-			Math.max(0, currentLayer - 1),
-			getLayers().length - 1
-		);
+		// IMPORTANT: Use filePosition for accurate layer detection instead of currentLayer prop
+		// currentLayer comes from Moonraker's print_stats.info which is unreliable for preview
+		const currentPrintedLayer = filePosition > 0
+			? findLayerByFilePosition(getLayers(), filePosition)
+			: Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1);
 		const positionKey = `${nozzlePosition?.x},${nozzlePosition?.y},${nozzlePosition?.z}`;
 		const needsRender =
 			displayLayer !== lastRenderedLayer ||
@@ -554,6 +533,45 @@
 			lastRenderedCurrentLayer = currentPrintedLayer;
 			render();
 			console.log('[renderEffect] Completed in', (performance.now() - startTime).toFixed(2), 'ms');
+		}
+	});
+
+	// Auto-sync displayLayer with currentLayer when in follow mode
+	$effect(() => {
+		if (!parseResult || isUserNavigating) {
+			return;
+		}
+
+		const layers = getLayers();
+		if (layers.length === 0) {
+			return;
+		}
+
+		// IMPORTANT: Use filePosition for accurate layer detection instead of currentLayer prop
+		// currentLayer comes from Moonraker's print_stats.info which is unreliable for preview
+		const currentPrintedLayer = filePosition > 0
+			? findLayerByFilePosition(layers, filePosition)
+			: Math.min(Math.max(0, currentLayer - 1), layers.length - 1);
+
+		// Sync displayLayer with currentLayer when not manually navigating
+		if (displayLayer !== currentPrintedLayer) {
+			console.log('[autoSync] Syncing displayLayer:', displayLayer, '-> currentPrintedLayer:', currentPrintedLayer);
+			displayLayer = currentPrintedLayer;
+		}
+	});
+
+	// Reset displayLayer if out of bounds after G-code change
+	$effect(() => {
+		const layers = getLayers();
+
+		if (layers.length === 0) {
+			return;
+		}
+
+		if (displayLayer >= layers.length) {
+			console.log('[boundsCheck] Resetting displayLayer from', displayLayer, 'to', layers.length - 1);
+			displayLayer = Math.min(displayLayer, layers.length - 1);
+			isUserNavigating = false;
 		}
 	});
 
@@ -633,8 +651,12 @@
 				−
 			</button>
 			<button
-				class="w-10 h-10 bg-surface-700 hover:bg-surface-600 rounded-lg flex items-center justify-center text-sm"
+				class="w-10 h-10 rounded-lg flex items-center justify-center text-sm
+					{isUserNavigating
+						? 'bg-surface-700 hover:bg-surface-600'
+						: 'bg-primary-500 hover:bg-primary-600'}"
 				onclick={goToCurrentLayer}
+				title={isUserNavigating ? $locales('viewer.goToCurrentLayer') : $locales('viewer.followingMode')}
 			>
 				⌂
 			</button>
@@ -643,9 +665,8 @@
 		<!-- Layer info -->
 		<div class="absolute bottom-4 left-4 bg-surface-800/80 backdrop-blur px-3 py-2 rounded-lg text-sm">
 			{$locales('viewer.layer')}: {displayLayer + 1} / {getLayers().length}
-			{displayLayer !==
-				Math.min(Math.max(0, currentLayer - 1), getLayers().length - 1)
-				? ` (${$locales('viewer.current')}: ${currentLayer})`
+			{displayLayer !== currentPrintedLayer
+				? ` (${$locales('viewer.current')}: ${currentPrintedLayer + 1})`
 				: ''}
 		</div>
 	{:else}
