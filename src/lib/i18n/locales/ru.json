@@ -114,6 +114,8 @@
 	},
 	"view": {
 		"title": "Статус печати",
+		"titlePaused": "На паузе",
+		"titleDone": "Завершено",
 		"printing": "Печатается",
 		"paused": "На паузе",
 		"complete": "Завершено",

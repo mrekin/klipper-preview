@@ -44,6 +44,40 @@
 	// Current locale for formatters
 	let currentLocale = $derived($locale || 'en');
 
+	// Computed page title based on printer status
+	let originalTitle = $derived(`${$_('view.title')} | ${$_('app.name')}`);
+
+	let pageTitle = $derived(() => {
+		if (!status) return originalTitle;
+
+		const progress = Math.round(status.progress);
+
+		// Printing with progress
+		if (status.state === 'printing' && progress > 0) {
+			return `${progress}% - ${originalTitle}`;
+		}
+
+		// Paused with progress
+		if (status.state === 'paused' && progress > 0) {
+			return `${$_('view.titlePaused')}: ${progress}% - ${originalTitle}`;
+		}
+
+		// Complete
+		if (status.state === 'complete') {
+			return `${$_('view.titleDone')} - ${originalTitle}`;
+		}
+
+		// Default (standby, error, cancelled, or progress = 0)
+		return originalTitle;
+	});
+
+	// Update document title reactively
+	$effect(() => {
+		if (browser) {
+			document.title = pageTitle();
+		}
+	});
+
 	let updateInterval: ReturnType<typeof setInterval> | undefined = undefined;
 
 	let currentFilename = $derived.by(() => status?.filename ?? null);
@@ -170,7 +204,7 @@
 </script>
 
 <svelte:head>
-	<title>{$_('view.title')} | {$_('app.name')}</title>
+	<title>{pageTitle()}</title>
 </svelte:head>
 
 <div class="min-h-screen bg-surface-50-950">

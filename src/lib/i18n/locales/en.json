@@ -114,6 +114,8 @@
 	},
 	"view": {
 		"title": "Print Status",
+		"titlePaused": "Paused",
+		"titleDone": "Done",
 		"printing": "Printing",
 		"paused": "Paused",
 		"complete": "Complete",
